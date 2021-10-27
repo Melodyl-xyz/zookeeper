@@ -53,9 +53,12 @@ public class FileTxnSnapLog {
     //the directory containing the
     //the snapshot directory
     private final File snapDir;
+    // txnLog = new FileTxnLog(this.dataDir);
+    // snapLog = new FileSnap(this.snapDir);
     private TxnLog txnLog;
     private SnapShot snapLog;
     private final boolean trustEmptySnapshot;
+    // 事务版本version-2
     public final static int VERSION = 2;
     public final static String version = "version-";
 
@@ -107,6 +110,7 @@ public class FileTxnSnapLog {
 
         // by default create snap/log dirs, but otherwise complain instead
         // See ZOOKEEPER-1161 for more details
+        // 为了提醒有些用户的dataConfig填错了，然后还创建成功的情况。
         boolean enableAutocreate = Boolean.valueOf(
                 System.getProperty(ZOOKEEPER_DATADIR_AUTOCREATE,
                         ZOOKEEPER_DATADIR_AUTOCREATE_DEFAULT));
@@ -159,6 +163,7 @@ public class FileTxnSnapLog {
             checkSnapDir();
         }
 
+        // FileTxnSnapLog 由FileTxnLog和FileSnap组成
         txnLog = new FileTxnLog(this.dataDir);
         snapLog = new FileSnap(this.snapDir);
     }

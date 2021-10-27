@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -95,7 +95,7 @@ public class FileTxnLog implements TxnLog, Closeable {
     private static final Logger LOG;
 
     public final static int TXNLOG_MAGIC =
-        ByteBuffer.wrap("ZKLG".getBytes()).getInt();
+            ByteBuffer.wrap("ZKLG".getBytes()).getInt();
 
     public final static int VERSION = 2;
 
@@ -105,7 +105,16 @@ public class FileTxnLog implements TxnLog, Closeable {
     static final String ZOOKEEPER_FSYNC_WARNING_THRESHOLD_MS_PROPERTY = "zookeeper." + FSYNC_WARNING_THRESHOLD_MS_PROPERTY;
 
     /** Maximum time we allow for elapsed fsync before WARNing */
-    private final static long fsyncWarningThresholdMS;
+    private final static long fsyncWarningThresholdMS; // 1s，写日志写了1s，就warning
+
+    /*
+    决定了写进去的数据是否应该同步刷到磁盘(zookeeper.forceSync)中，yes或者no。
+    默认值为yes，在数据被sync到磁盘之前，事务对应的ack不会被发送回leader。
+    sync系统调用很昂贵，且是事务处理中耗时最大的步骤。如果设置为no，那么数据一旦写
+    到操作系统时，事务的ack马上会被发送，通常在数据真正落到磁盘前操作系统会把数据缓存起来。
+    设置为no会提高性能，但是当server崩溃或者机器断电发生后，重启时的恢复的代价会变得更大。
+    */
+    private final boolean forceSync = !System.getProperty("zookeeper.forceSync", "yes").equals("no");
 
     static {
         LOG = LoggerFactory.getLogger(FileTxnLog.class);
@@ -117,21 +126,20 @@ public class FileTxnLog implements TxnLog, Closeable {
         fsyncWarningThresholdMS = fsyncWarningThreshold;
     }
 
-    long lastZxidSeen;
-    volatile BufferedOutputStream logStream = null;
-    volatile OutputArchive oa;
-    volatile FileOutputStream fos = null;
-
-    File logDir;
-    private final boolean forceSync = !System.getProperty("zookeeper.forceSync", "yes").equals("no");
     long dbId;
+    long lastZxidSeen;
+    File logDir;
+    File logFileWrite = null; // logDir目录下要写入的文件的名称
+    volatile FileOutputStream fos = null; // logFileWriter 封装的 FileOutputStream
+    volatile BufferedOutputStream logStream = null; // fos 封装的 BufferedOutputStream
+    volatile OutputArchive oa; // logStream 封装的OutputArchive
     private LinkedList<FileOutputStream> streamsToFlush =
-        new LinkedList<FileOutputStream>();
-    File logFileWrite = null;
+            new LinkedList<FileOutputStream>();
     private FilePadding filePadding = new FilePadding();
 
+    // 在这里是为了计算写入磁盘时间是否默认的时间（1s）
     private ServerStats serverStats;
-
+    // 异步写入磁盘的时间
     private volatile long syncElapsedMS = -1L;
 
     /**
@@ -144,10 +152,10 @@ public class FileTxnLog implements TxnLog, Closeable {
     }
 
     /**
-      * method to allow setting preallocate size
-      * of log file to pad the file.
-      * @param size the size to set to in bytes
-      */
+     * method to allow setting preallocate size
+     * of log file to pad the file.
+     * @param size the size to set to in bytes
+     */
     public static void setPreallocSize(long size) {
         FilePadding.setPreallocSize(size);
     }
@@ -165,7 +173,7 @@ public class FileTxnLog implements TxnLog, Closeable {
      * creates a checksum algorithm to be used
      * @return the checksum used for this txnlog
      */
-    protected Checksum makeChecksumAlgorithm(){
+    protected Checksum makeChecksumAlgorithm() {
         return new Adler32();
     }
 
@@ -184,7 +192,7 @@ public class FileTxnLog implements TxnLog, Closeable {
     /**
      * close all the open file handles
      * @throws IOException
-      */
+     */
     public synchronized void close() throws IOException {
         if (logStream != null) {
             logStream.close();
@@ -200,9 +208,11 @@ public class FileTxnLog implements TxnLog, Closeable {
      * @param txn the transaction part of the entry
      * returns true iff something appended, otw false
      */
+    /*
+    这个方法只是调用了flush去写入，并不能保证一定落盘了。
+    */
     public synchronized boolean append(TxnHeader hdr, Record txn)
-        throws IOException
-    {
+            throws IOException {
         if (hdr == null) {
             return false;
         }
@@ -213,23 +223,25 @@ public class FileTxnLog implements TxnLog, Closeable {
         } else {
             lastZxidSeen = hdr.getZxid();
         }
-        if (logStream==null) {
-           if(LOG.isInfoEnabled()){
+        if (logStream == null) {
+            if (LOG.isInfoEnabled()) {
                 LOG.info("Creating new log file: " + Util.makeLogName(hdr.getZxid()));
-           }
+            }
 
-           logFileWrite = new File(logDir, Util.makeLogName(hdr.getZxid()));
-           fos = new FileOutputStream(logFileWrite);
-           logStream=new BufferedOutputStream(fos);
-           oa = BinaryOutputArchive.getArchive(logStream);
-           FileHeader fhdr = new FileHeader(TXNLOG_MAGIC,VERSION, dbId);
-           fhdr.serialize(oa, "fileheader");
-           // Make sure that the magic number is written before padding.
-           logStream.flush();
-           filePadding.setCurrentSize(fos.getChannel().position());
-           streamsToFlush.add(fos);
+            logFileWrite = new File(logDir, Util.makeLogName(hdr.getZxid()));
+            fos = new FileOutputStream(logFileWrite);
+            logStream = new BufferedOutputStream(fos);
+            oa = BinaryOutputArchive.getArchive(logStream);
+
+            // 提供给其他人使用前，写入一个FileHeader
+            FileHeader fhdr = new FileHeader(TXNLOG_MAGIC, VERSION, dbId);
+            fhdr.serialize(oa, "fileheader");
+            // Make sure that the magic number is written before padding.
+            logStream.flush(); // 创建事务日志，并且写入了一个fileHeader
+            filePadding.setCurrentSize(fos.getChannel().position());
+            streamsToFlush.add(fos); // 将由当前的logDir创建的fileChannel放在streamToFlush里面
         }
-        filePadding.padFile(fos.getChannel());
+        filePadding.padFile(fos.getChannel()); // 填充文件
         byte[] buf = Util.marshallTxnEntry(hdr, txn);
         if (buf == null || buf.length == 0) {
             throw new IOException("Faulty serialization for header " +
@@ -251,7 +263,13 @@ public class FileTxnLog implements TxnLog, Closeable {
      * @param snapshotZxid return files at, or before this zxid
      * @return
      */
-    public static File[] getLogFiles(File[] logDirList,long snapshotZxid) {
+    /*
+    查snapshotZxid最近的，且不大于snapshotZxid的所有事务ID文件。
+    换个意思就是：找包含snapshotZxid对应的事务ID文件，以及之后的所有事务ID文件。
+    注意：该文件是排了序的。
+    */
+    public static File[] getLogFiles(File[] logDirList, long snapshotZxid) {
+        // 整理files
         List<File> files = Util.sortDataDir(logDirList, LOG_FILE_PREFIX, true);
         long logZxid = 0;
         // Find the log file that starts before or at the same time as the
@@ -261,18 +279,23 @@ public class FileTxnLog implements TxnLog, Closeable {
             if (fzxid > snapshotZxid) {
                 continue;
             }
-            // the files
-            // are sorted with zxid's
+            // fzxid <= snapshotZxid
+            // the files are sorted with zxid's
             if (fzxid > logZxid) {
+                // fzxid > logZxid && fzxid <= snapshotZxid
+                // logZxid表示离快照事务ID最近的文件的事务ID
                 logZxid = fzxid;
             }
         }
-        List<File> v=new ArrayList<File>(5);
+        List<File> v = new ArrayList<File>(5);
         for (File f : files) {
             long fzxid = Util.getZxidFromName(f.getName(), LOG_FILE_PREFIX);
             if (fzxid < logZxid) {
                 continue;
             }
+
+            // fzxid >= logZxid
+            // 获取离快照事务ID最近的事务ID的文件，并添加进去。
             v.add(f);
         }
         return v.toArray(new File[0]);
@@ -283,10 +306,16 @@ public class FileTxnLog implements TxnLog, Closeable {
      * get the last zxid that was logged in the transaction logs
      * @return the last zxid logged in the transaction logs
      */
+    /*
+    读事务日志，读到最后一个TxnHeader，返回它的事务ID。
+    如果文件没有，就返回-1。
+     */
     public long getLastLoggedZxid() {
+        // 从头开始读取事务日志里面的日志
         File[] files = getLogFiles(logDir.listFiles(), 0);
-        long maxLog=files.length>0?
-                Util.getZxidFromName(files[files.length-1].getName(),LOG_FILE_PREFIX):-1;
+        // 计算最后一个文件的事务ID
+        long maxLog = files.length > 0 ?
+                Util.getZxidFromName(files[files.length - 1].getName(), LOG_FILE_PREFIX) : -1;
 
         // if a log file is more recent we must scan it to find
         // the highest zxid
@@ -296,10 +325,11 @@ public class FileTxnLog implements TxnLog, Closeable {
             FileTxnLog txn = new FileTxnLog(logDir);
             itr = txn.read(maxLog);
             while (true) {
-                if(!itr.next())
+                // 读最后一个文件的事务
+                if (!itr.next())
                     break;
                 TxnHeader hdr = itr.getHeader();
-                zxid = hdr.getZxid();
+                zxid = hdr.getZxid(); // 读到最后一个事务ID，后面没了，就跳出
             }
         } catch (IOException e) {
             LOG.warn("Unexpected exception", e);
@@ -323,6 +353,9 @@ public class FileTxnLog implements TxnLog, Closeable {
      * commit the logs. make sure that everything hits the
      * disk
      */
+    /*
+    这个函数会强制刷新之前事务创建的所有padFile到磁盘，然后只留下最后一个
+    */
     public synchronized void commit() throws IOException {
         if (logStream != null) {
             logStream.flush();
@@ -337,7 +370,7 @@ public class FileTxnLog implements TxnLog, Closeable {
 
                 syncElapsedMS = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startSyncNS);
                 if (syncElapsedMS > fsyncWarningThresholdMS) {
-                    if(serverStats != null) {
+                    if (serverStats != null) {
                         serverStats.incrementFsyncThresholdExceedCount();
                     }
                     LOG.warn("fsync-ing the write ahead log in "
@@ -393,19 +426,20 @@ public class FileTxnLog implements TxnLog, Closeable {
     public boolean truncate(long zxid) throws IOException {
         FileTxnIterator itr = null;
         try {
-            itr = new FileTxnIterator(this.logDir, zxid);
+            itr = new FileTxnIterator(this.logDir, zxid); // 这个会跳转到zxid对应的position位置
             PositionInputStream input = itr.inputStream;
-            if(input == null) {
+            if (input == null) {
                 throw new IOException("No log files found to truncate! This could " +
                         "happen if you still have snapshots from an old setup or " +
                         "log files were deleted accidentally or dataLogDir was changed in zoo.cfg.");
             }
             long pos = input.getPosition();
             // now, truncate at the current position
-            RandomAccessFile raf=new RandomAccessFile(itr.logFile,"rw");
+            // 截断小技巧
+            RandomAccessFile raf = new RandomAccessFile(itr.logFile, "rw");
             raf.setLength(pos);
             raf.close();
-            while(itr.goToNextLog()) {
+            while (itr.goToNextLog()) {
                 if (!itr.logFile.delete()) {
                     LOG.warn("Unable to truncate {}", itr.logFile);
                 }
@@ -423,20 +457,20 @@ public class FileTxnLog implements TxnLog, Closeable {
      * @throws IOException
      */
     private static FileHeader readHeader(File file) throws IOException {
-        InputStream is =null;
+        InputStream is = null;
         try {
             is = new BufferedInputStream(new FileInputStream(file));
-            InputArchive ia=BinaryInputArchive.getArchive(is);
+            InputArchive ia = BinaryInputArchive.getArchive(is);
             FileHeader hdr = new FileHeader();
             hdr.deserialize(ia, "fileheader");
             return hdr;
-         } finally {
-             try {
-                 if (is != null) is.close();
-             } catch (IOException e) {
-                 LOG.warn("Ignoring exception during close", e);
-             }
-         }
+        } finally {
+            try {
+                if (is != null) is.close();
+            } catch (IOException e) {
+                LOG.warn("Ignoring exception during close", e);
+            }
+        }
     }
 
     /**
@@ -445,9 +479,9 @@ public class FileTxnLog implements TxnLog, Closeable {
      */
     public long getDbId() throws IOException {
         FileTxnIterator itr = new FileTxnIterator(logDir, 0);
-        FileHeader fh=readHeader(itr.logFile);
+        FileHeader fh = readHeader(itr.logFile);
         itr.close();
-        if(fh==null)
+        if (fh == null)
             throw new IOException("Unsupported Format.");
         return fh.getDbid();
     }
@@ -467,8 +501,13 @@ public class FileTxnLog implements TxnLog, Closeable {
      * wrap buffered input streams to provide the right offset
      * for the application.
      */
+    /*
+    跟踪InputStream中位置的类。这个位置指向应用程序已消费的偏移量。
+    它可以包装缓冲输入流，为应用程序提供正确的偏移量。
+    */
     static class PositionInputStream extends FilterInputStream {
         long position;
+
         protected PositionInputStream(InputStream in) {
             super(in);
             position = 0;
@@ -508,6 +547,7 @@ public class FileTxnLog implements TxnLog, Closeable {
             }
             return rc;
         }
+
         public long getPosition() {
             return position;
         }
@@ -533,17 +573,24 @@ public class FileTxnLog implements TxnLog, Closeable {
      * which is used for reading the transaction logs
      */
     public static class FileTxnIterator implements TxnLog.TxnIterator {
+        static final String CRC_ERROR = "CRC check failed";
+
         File logDir;
         long zxid;
+
+        // next 赋值
         TxnHeader hdr;
         Record record;
-        File logFile;
-        InputArchive ia;
-        static final String CRC_ERROR="CRC check failed";
 
-        PositionInputStream inputStream=null;
+        // goToNextLog 赋值
+        File logFile; // 当前遍历的文件
+        InputArchive ia;
+        PositionInputStream inputStream = null;
         //stored files is the list of files greater than
         //the zxid we are looking for.
+        // 包含所有大于事务Id的，也包括一个事务ID小于zxid的文件。
+        // 从大到小排的序，而不是从小到大排的序。
+        // 但是遍历又是从最后朝前遍历的，也就是从小到大遍历的。
         private ArrayList<File> storedFiles;
 
         /**
@@ -556,6 +603,9 @@ public class FileTxnLog implements TxnLog, Closeable {
          *        a given zxid
          * @throws IOException
          */
+        /*
+        fastForward：快速指向到指定事务ID的位置。
+        */
         public FileTxnIterator(File logDir, long zxid, boolean fastForward)
                 throws IOException {
             this.logDir = logDir;
@@ -587,18 +637,24 @@ public class FileTxnLog implements TxnLog, Closeable {
          */
         void init() throws IOException {
             storedFiles = new ArrayList<File>();
+            // getLogFiles出来的是升序的
+            // Util.sortDataDir出来的是逆序的
             List<File> files = Util.sortDataDir(FileTxnLog.getLogFiles(logDir.listFiles(), 0), LOG_FILE_PREFIX, false);
-            for (File f: files) {
+            // 上一步是找到大于事务ID为0且排序的，这一步找的是大于zxid的。
+            for (File f : files) {
                 if (Util.getZxidFromName(f.getName(), LOG_FILE_PREFIX) >= zxid) {
                     storedFiles.add(f);
                 }
                 // add the last logfile that is less than the zxid
+                // 添加最后一个小于zxid的日志文件，然后就跳出循环
                 else if (Util.getZxidFromName(f.getName(), LOG_FILE_PREFIX) < zxid) {
                     storedFiles.add(f);
                     break;
                 }
             }
-            goToNextLog();
+            // 去下个文件
+            goToNextLog(); // this.ia; this.logFile; this.inputStream赋值
+            // 确定这个文件该读取的TxnHeader、record
             next();
         }
 
@@ -621,7 +677,7 @@ public class FileTxnLog implements TxnLog, Closeable {
          */
         private boolean goToNextLog() throws IOException {
             if (storedFiles.size() > 0) {
-                this.logFile = storedFiles.remove(storedFiles.size()-1);
+                this.logFile = storedFiles.remove(storedFiles.size() - 1);
                 ia = createInputArchive(this.logFile);
                 return true;
             }
@@ -634,9 +690,10 @@ public class FileTxnLog implements TxnLog, Closeable {
          * @param is the inputstream
          * @throws IOException
          */
+        // todo melody 这里is没啥用。
         protected void inStreamCreated(InputArchive ia, InputStream is)
-            throws IOException{
-            FileHeader header= new FileHeader();
+                throws IOException {
+            FileHeader header = new FileHeader();
             header.deserialize(ia, "fileheader");
             if (header.getMagic() != FileTxnLog.TXNLOG_MAGIC) {
                 throw new IOException("Transaction log: " + this.logFile + " has invalid magic number "
@@ -647,16 +704,15 @@ public class FileTxnLog implements TxnLog, Closeable {
 
         /**
          * Invoked to indicate that the input stream has been created.
-         * @param ia input archive
-         * @param is file input stream associated with the input archive.
+         * @param logFile the inputarchive created from
          * @throws IOException
          **/
         protected InputArchive createInputArchive(File logFile) throws IOException {
-            if(inputStream==null){
-                inputStream= new PositionInputStream(new BufferedInputStream(new FileInputStream(logFile)));
+            if (inputStream == null) {
+                inputStream = new PositionInputStream(new BufferedInputStream(new FileInputStream(logFile)));
                 LOG.debug("Created new input stream " + logFile);
-                ia  = BinaryInputArchive.getArchive(inputStream);
-                inStreamCreated(ia,inputStream);
+                ia = BinaryInputArchive.getArchive(inputStream);
+                inStreamCreated(ia, inputStream); // 读一下header，看下文件是否ok的
                 LOG.debug("Created new input archive " + logFile);
             }
             return ia;
@@ -666,7 +722,7 @@ public class FileTxnLog implements TxnLog, Closeable {
          * create a checksum algorithm
          * @return the checksum algorithm
          */
-        protected Checksum makeChecksumAlgorithm(){
+        protected Checksum makeChecksumAlgorithm() {
             return new Adler32();
         }
 
@@ -675,6 +731,9 @@ public class FileTxnLog implements TxnLog, Closeable {
          * @return true if there is more transactions to be read
          * false if not.
          */
+        /*
+        如果当前读完了，抛出了EOF；就去下一个文件里面读。
+        */
         public boolean next() throws IOException {
             if (ia == null) {
                 return false;
@@ -683,7 +742,7 @@ public class FileTxnLog implements TxnLog, Closeable {
                 long crcValue = ia.readLong("crcvalue");
                 byte[] bytes = Util.readTxnBytes(ia);
                 // Since we preallocate, we define EOF to be an
-                if (bytes == null || bytes.length==0) {
+                if (bytes == null || bytes.length == 0) {
                     throw new EOFException("Failed to read " + logFile);
                 }
                 // EOF or corrupted record
@@ -692,7 +751,7 @@ public class FileTxnLog implements TxnLog, Closeable {
                 crc.update(bytes, 0, bytes.length);
                 if (crcValue != crc.getValue())
                     throw new IOException(CRC_ERROR);
-                hdr = new TxnHeader();
+                hdr = new TxnHeader(); // header是8+4+8+8+4，32位，4个字节
                 record = SerializeUtils.deserializeTxn(bytes, hdr);
             } catch (EOFException e) {
                 LOG.debug("EOF exception " + e);

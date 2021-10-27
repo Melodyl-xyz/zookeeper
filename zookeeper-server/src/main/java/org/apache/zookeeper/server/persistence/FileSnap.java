@@ -54,6 +54,7 @@ public class FileSnap implements SnapShot {
     private static final int VERSION = 2;
     private static final long dbId = -1;
     private static final Logger LOG = LoggerFactory.getLogger(FileSnap.class);
+    // 1514885966
     public final static int SNAP_MAGIC
             = ByteBuffer.wrap("ZKSN".getBytes()).getInt();
 
@@ -72,20 +73,25 @@ public class FileSnap implements SnapShot {
         // we run through 100 snapshots (not all of them)
         // if we cannot get it running within 100 snapshots
         // we should  give up
+        // 最多找100个有效的快照文件
         List<File> snapList = findNValidSnapshots(100);
         if (snapList.size() == 0) {
             return -1L;
         }
         File snap = null;
         boolean foundValid = false;
+        // 通过checkSum来检查有效性
         for (int i = 0, snapListSize = snapList.size(); i < snapListSize; i++) {
             snap = snapList.get(i);
             LOG.info("Reading snapshot " + snap);
             try (InputStream snapIS = new BufferedInputStream(new FileInputStream(snap));
                  CheckedInputStream crcIn = new CheckedInputStream(snapIS, new Adler32())) {
                 InputArchive ia = BinaryInputArchive.getArchive(crcIn);
+                // 将InputArchive转为datatree和session，如果抛异常说明文件损坏
                 deserialize(dt, sessions, ia);
+                // checkInputStream计算checkSum
                 long checkSum = crcIn.getChecksum().getValue();
+                // 读取val
                 long val = ia.readLong("val");
                 if (val != checkSum) {
                     throw new IOException("CRC corruption in snapshot :  " + snap);
@@ -146,7 +152,15 @@ public class FileSnap implements SnapShot {
      * less than n in case enough snapshots are not available).
      * @throws IOException
      */
+    /*
+    查找最后（可能）个有效的快照。这会对快照的有效性进行一些小检查。
+    它只是在快照结束时检查快照。这并不意味着快照确实有效，但很可能有效。
+    此外，最新的将是第一个名单。
+    n：最新的n个快照
+    return：最后n个快照（如果没有足够的快照可用，则数量可能少于n个）。
+    */
     private List<File> findNValidSnapshots(int n) throws IOException {
+        // 整理snapDir目录下的文件
         List<File> files = Util.sortDataDir(snapDir.listFiles(), SNAPSHOT_FILE_PREFIX, false);
         int count = 0;
         List<File> list = new ArrayList<File>();
@@ -155,6 +169,7 @@ public class FileSnap implements SnapShot {
             // from the valid snapshot and continue
             // until we find a valid one
             try {
+                // 检查如果是正常的snapshot
                 if (Util.isValidSnapshot(f)) {
                     list.add(f);
                     count++;
@@ -176,6 +191,11 @@ public class FileSnap implements SnapShot {
      * @return the last n snapshots
      * @throws IOException
      */
+    /*
+    找到最近的n个快照日志。这里不检查文件是否有效。
+    该方法不包括在SnapShot的接口中。
+    > 这里是提供给purge来使用的，purge的时候，会重新创建个FileSnap类，然后调用该方法决定那些是不会被清理掉的。
+    */
     public List<File> findNRecentSnapshots(int n) throws IOException {
         List<File> files = Util.sortDataDir(snapDir.listFiles(), SNAPSHOT_FILE_PREFIX, false);
         int count = 0;
@@ -240,6 +260,10 @@ public class FileSnap implements SnapShot {
      * the close operation will block and will wait till serialize
      * is done and will set the close flag
      */
+    /*
+    同步关闭标志位，这样如果序列化正在进行（serialize前也有个synchronize），
+    关闭操作将阻塞并等待序列化完成并设置关闭标志
+    */
     @Override
     public synchronized void close() throws IOException {
         close = true;

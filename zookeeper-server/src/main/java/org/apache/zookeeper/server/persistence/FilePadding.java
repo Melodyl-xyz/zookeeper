@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
+// ZooKeeper 当检测到当前事务日志文件不足4KB时，就会填充0使该文件到64MB（这里0仅仅作为填充位）
 public class FilePadding {
     private static final Logger LOG;
     private static long preAllocSize = 65536 * 1024;
@@ -72,6 +73,9 @@ public class FilePadding {
      * @param fileChannel the fileChannel of the file to be padded
      * @throws IOException
      */
+    /*
+    其作用是当文件大小不满64MB时，向文件填充0以达到64MB大小。
+    */
     long padFile(FileChannel fileChannel) throws IOException {
         long newFileSize = calculateFileSizeWithPadding(fileChannel.position(), currentSize, preAllocSize);
         if (currentSize != newFileSize) {

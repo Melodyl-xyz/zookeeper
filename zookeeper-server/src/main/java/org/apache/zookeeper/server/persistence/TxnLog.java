@@ -91,7 +91,7 @@ public interface TxnLog {
     void commit() throws IOException;
 
     /**
-     *
+     * 事务日志的已用同步时间（毫秒）
      * @return transaction log's elapsed sync time in milliseconds
      */
     long getTxnLogSyncElapsedTime();
