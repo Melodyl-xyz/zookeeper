@@ -28,7 +28,7 @@ import java.io.InputStream;
  */
 public class BinaryInputArchive implements InputArchive {
     public static final String UNREASONBLE_LENGTH= "Unreasonable length = ";
-    public static final int maxBuffer = Integer.getInteger("jute.maxbuffer", 0xfffff);
+    public static final int maxBuffer = Integer.getInteger("jute.maxbuffer", 0xfffff); // 1048575
     private static final int extraMaxBuffer;
 
     static {
@@ -99,14 +99,16 @@ public class BinaryInputArchive implements InputArchive {
     public String readString(String tag) throws IOException {
     	int len = in.readInt();
     	if (len == -1) return null;
-        checkLength(len);
+    	// https://cloud.tencent.com/developer/article/1516691
+        // 这个讲了先重启客户端，后重启服务端造成的影响。
+        checkLength(len); // 这里会检查length，如果超过了，就会抛出异常。
     	byte b[] = new byte[len];
     	in.readFully(b);
     	return new String(b, "UTF8");
     }
 
     public byte[] readBuffer(String tag) throws IOException {
-        int len = readInt(tag);
+        int len = readInt(tag); // 前面一个32位是长度，后面的都是byte
         if (len == -1) return null;
         checkLength(len);
         byte[] arr = new byte[len];
@@ -117,7 +119,7 @@ public class BinaryInputArchive implements InputArchive {
     public void readRecord(Record r, String tag) throws IOException {
         r.deserialize(this, tag);
     }
-    
+
     public void startRecord(String tag) throws IOException {}
     
     public void endRecord(String tag) throws IOException {}
