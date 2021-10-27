@@ -73,10 +73,21 @@ public enum EphemeralType {
     NORMAL,
     /**
      * Container node
+     * 容器节点是 3.5 以后新增的节点类型，只要在调用create 方法时，
+     * 指定CreateMode 为CONTAINER 即可创建容器的节点类型，容器节点的表现形式和持久节点是一样的，
+     * 但是区别是 ZK 服务端启动后，会有一个单独的线程去扫描，所有的容器节点，当发现容器节点的子节
+     * 点数量为 0 时，会自动删除该节点，除此之外和持久节点没有区别，官方注释给出的使用场景是Container nodes
+     * are special purpose nodes useful for recipes such as leader, lock, etc. 说可以用在 leader 或者锁的场景中。
      */
     CONTAINER,
     /**
      * TTL node
+     * Zookeeper3.5.3版本增加了限时节点，当创建一个永久节点或者永久有序节点时，
+     * 可以给这个节点增加一个时间属性（毫秒为单位），当指定时间内节点没有被修改，
+     * 并且不存在子节点，那么服务端会在随后的某个时间点将此节点删除。
+     *
+     * 直接添加extendedTypesEnabled=true在zoo.cfg，就可以开启这个Node
+     * 基本和容器相同，当超过TTL 时间节点下面都没有再创建子节点时会被删除，但是当创建子节点会重置该超时时
      */
     TTL() {
         @Override
