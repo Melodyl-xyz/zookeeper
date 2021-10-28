@@ -228,6 +228,7 @@ public class FileTxnLog implements TxnLog, Closeable {
                 LOG.info("Creating new log file: " + Util.makeLogName(hdr.getZxid()));
             }
 
+            // 创建logDir/logName文件
             logFileWrite = new File(logDir, Util.makeLogName(hdr.getZxid()));
             fos = new FileOutputStream(logFileWrite);
             logStream = new BufferedOutputStream(fos);
