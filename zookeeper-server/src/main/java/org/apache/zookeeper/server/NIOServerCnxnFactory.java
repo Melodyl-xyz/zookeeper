@@ -87,6 +87,8 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         "zookeeper.nio.shutdownTimeout";
 
     static {
+        // 我们可以通过UncaughtExceptionHandler，
+        // 用来捕获并处理在一个线程对象中抛出的未检测异常，以避免程序终止。。
         Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
                 public void uncaughtException(Thread t, Throwable e) {
                     LOG.error("Thread " + t + " died", e);
@@ -162,6 +164,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             if (sc != null) {
                 try {
                     // Hard close immediately, discarding buffers
+                    // 当网卡收到关闭连接请求后，无论数据是否发送完毕，立即发送RST包关闭连接
                     sc.socket().setSoLinger(true, 0);
                 } catch (SocketException e) {
                     LOG.warn("Unable to set socket linger to 0, socket close"
@@ -191,10 +194,8 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                 Set<SelectorThread> selectorThreads) throws IOException {
             super("NIOServerCxnFactory.AcceptThread:" + addr);
             this.acceptSocket = ss;
-            this.acceptKey =
-                acceptSocket.register(selector, SelectionKey.OP_ACCEPT);
-            this.selectorThreads = Collections.unmodifiableList(
-                new ArrayList<SelectorThread>(selectorThreads));
+            this.acceptKey = acceptSocket.register(selector, SelectionKey.OP_ACCEPT);
+            this.selectorThreads = Collections.unmodifiableList(new ArrayList<SelectorThread>(selectorThreads));
             selectorIterator = this.selectorThreads.iterator();
         }
 
@@ -243,6 +244,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                             // queue, pause accepting to give us time to free
                             // up file descriptors and so the accept thread
                             // doesn't spin in a tight loop.
+                            // 达到单IP的最大限额
                             pauseAccept(10);
                         }
                     } else {
@@ -288,6 +290,8 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                 InetAddress ia = sc.socket().getInetAddress();
                 int cnxncount = getClientCnxnCount(ia);
 
+                // maxClientCnxns配置的说明
+                // 这个配置的作用就是：一个ip所对应的客户机，只能和zk服务器维持60个连接。
                 if (maxClientCnxns > 0 && cnxncount >= maxClientCnxns){
                     throw new IOException("Too many connections from " + ia
                                           + " - max is " + maxClientCnxns );
@@ -298,6 +302,8 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                 sc.configureBlocking(false);
 
                 // Round-robin assign this connection to a selector thread
+                // 轮询分配selector
+                // tips: 实现轮询的小技巧
                 if (!selectorIterator.hasNext()) {
                     selectorIterator = selectorThreads.iterator();
                 }
@@ -388,8 +394,11 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             try {
                 while (!stopped) {
                     try {
+                        // Connect: 1. nio-select
                         select();
+                        // Connect: 5. 处理建立连接的请求
                         processAcceptedConnections();
+                        // Connect: 5. 处理完后，调整selectionKey的兴趣集合（有些要sk需要被限流，或者发送东西，就需要调整事件）
                         processInterestOpsUpdateRequests();
                     } catch (RuntimeException e) {
                         LOG.warn("Ignoring unexpected runtime exception", e);
@@ -439,6 +448,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                         continue;
                     }
                     if (key.isReadable() || key.isWritable()) {
+                        // Connect: 2. SelectorThread处理SelectionKey
                         handleIO(key);
                     } else {
                         LOG.warn("Unexpected ops in select " + key.readyOps());
@@ -461,8 +471,9 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             // Stop selecting this key while processing on its
             // connection
             cnxn.disableSelectable();
-            key.interestOps(0);
-            touchCnxn(cnxn);
+            key.interestOps(0);// 0 代表取消四个监听，代表不监听任何东西
+            touchCnxn(cnxn); // 更新超时时间
+            // Connect: 3. 从线程池分配线程处理这个Req
             workerPool.schedule(workRequest);
         }
 
@@ -738,6 +749,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
     public void start() {
         stopped = false;
         if (workerPool == null) {
+            // useAssignableThreads为false，代表workerPool是一个线程池组成
             workerPool = new WorkerService(
                 "NIOWorker", numWorkerThreads, false);
         }

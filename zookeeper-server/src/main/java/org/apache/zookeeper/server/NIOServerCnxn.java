@@ -72,8 +72,7 @@ public class NIOServerCnxn extends ServerCnxn {
 
     private ByteBuffer incomingBuffer = lenBuffer;
 
-    private final Queue<ByteBuffer> outgoingBuffers =
-        new LinkedBlockingQueue<ByteBuffer>();
+    private final Queue<ByteBuffer> outgoingBuffers = new LinkedBlockingQueue<ByteBuffer>();
 
     private int sessionTimeout;
 
@@ -173,13 +172,17 @@ public class NIOServerCnxn extends ServerCnxn {
         }
 
         if (incomingBuffer.remaining() == 0) { // have we read length bytes?
+            // remaining == 0 表示读完了。
             packetReceived();
             incomingBuffer.flip();
             if (!initialized) {
+                // 处理初始化连接请求
                 readConnectRequest();
             } else {
+                // 处理日常请求
                 readRequest();
             }
+            // 还原lenBuffer
             lenBuffer.clear();
             incomingBuffer = lenBuffer;
         }
@@ -222,6 +225,7 @@ public class NIOServerCnxn extends ServerCnxn {
          * with data from the non-direct buffers that we need to
          * send.
          */
+        // 这里运用到了ThreadLocal
         ByteBuffer directBuffer = NIOServerCnxnFactory.getDirectBuffer();
         if (directBuffer == null) {
             ByteBuffer[] bufferList = new ByteBuffer[outgoingBuffers.size()];
@@ -241,7 +245,7 @@ public class NIOServerCnxn extends ServerCnxn {
                 packetSent();
                 outgoingBuffers.remove();
             }
-         } else {
+        } else {
             directBuffer.clear();
 
             for (ByteBuffer b : outgoingBuffers) {
@@ -318,6 +322,7 @@ public class NIOServerCnxn extends ServerCnxn {
                 return;
             }
             if (k.isReadable()) {
+                // 读取头部的4个字节
                 int rc = sock.read(incomingBuffer);
                 if (rc < 0) {
                     throw new EndOfStreamException(
@@ -328,14 +333,19 @@ public class NIOServerCnxn extends ServerCnxn {
                 if (incomingBuffer.remaining() == 0) {
                     boolean isPayload;
                     if (incomingBuffer == lenBuffer) { // start of next request
+                        // 如果==lenbuffer，那说明里面是长度或者是4字命令
                         incomingBuffer.flip();
+                        // 读取长度后，如果不是四字命令，说明就是报文长度
+                        // 那么就为incomingBuffer赋值：ByteBuffer.allocate(len);
                         isPayload = readLength(k);
+                        // 清空buffer
                         incomingBuffer.clear();
                     } else {
                         // continuation
                         isPayload = true;
                     }
                     if (isPayload) { // not the case for 4letterword
+                        // Connect: 5. 处理SelectionKey的读请求
                         readPayload();
                     }
                     else {
@@ -346,6 +356,7 @@ public class NIOServerCnxn extends ServerCnxn {
                 }
             }
             if (k.isWritable()) {
+                // Connect: 5. 处理SelectionKey的写请求
                 handleWrite(k);
 
                 if (!initialized && !getReadInterest() && !getWriteInterest()) {
@@ -749,6 +760,8 @@ public class NIOServerCnxn extends ServerCnxn {
             return 0;
         }
         int interestOps = 0;
+        // 当某个连接达到Outstanding的阈值的时候，
+        // 通过从兴趣集合中移除read事件实现TCP背压
         if (getReadInterest()) {
             interestOps |= SelectionKey.OP_READ;
         }

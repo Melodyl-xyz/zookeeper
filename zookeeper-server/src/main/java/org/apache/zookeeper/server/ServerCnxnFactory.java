@@ -127,6 +127,7 @@ public abstract class ServerCnxnFactory {
         String serverCnxnFactoryName =
             System.getProperty(ZOOKEEPER_SERVER_CNXN_FACTORY);
         if (serverCnxnFactoryName == null) {
+            // ZooKeeper可以通过设置系统属性zookeeper.serverCnxnFactory配置ServerCnxnFactory的实现类,默认使用NIOServerCnxnFactory
             serverCnxnFactoryName = NIOServerCnxnFactory.class.getName();
         }
         try {
