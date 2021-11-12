@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>JAVA</ID>
+  <OriginalElement>org.apache.zookeeper.server.quorum.LeaderZooKeeperServer</OriginalElement>
+  <nodes>
+    <node x="415.75" y="103.0">org.apache.zookeeper.server.ZooKeeperServer</node>
+    <node x="388.5" y="309.0">org.apache.zookeeper.server.quorum.LeaderZooKeeperServer</node>
+    <node x="264.0" y="206.0">org.apache.zookeeper.server.quorum.QuorumZooKeeperServer</node>
+    <node x="500.75" y="0.0">org.apache.zookeeper.server.SessionTracker.SessionExpirer</node>
+    <node x="135.5" y="309.0">org.apache.zookeeper.server.quorum.LearnerZooKeeperServer</node>
+    <node x="0.0" y="412.0">org.apache.zookeeper.server.quorum.FollowerZooKeeperServer</node>
+    <node x="364.75" y="0.0">org.apache.zookeeper.server.ServerStats.Provider</node>
+    <node x="509.0" y="206.0">org.apache.zookeeper.server.quorum.ReadOnlyZooKeeperServer</node>
+    <node x="262.0" y="412.0">org.apache.zookeeper.server.quorum.ObserverZooKeeperServer</node>
+  </nodes>
+  <notes />
+  <edges>
+    <edge source="org.apache.zookeeper.server.quorum.FollowerZooKeeperServer" target="org.apache.zookeeper.server.quorum.LearnerZooKeeperServer">
+      <point x="0.0" y="-26.5" />
+      <point x="121.0" y="387.0" />
+      <point x="193.75" y="387.0" />
+      <point x="-58.25" y="26.5" />
+    </edge>
+    <edge source="org.apache.zookeeper.server.ZooKeeperServer" target="org.apache.zookeeper.server.SessionTracker.SessionExpirer">
+      <point x="43.75" y="-26.5" />
+      <point x="547.0" y="78.0" />
+      <point x="583.75" y="78.0" />
+      <point x="0.0" y="26.5" />
+    </edge>
+    <edge source="org.apache.zookeeper.server.quorum.LeaderZooKeeperServer" target="org.apache.zookeeper.server.quorum.QuorumZooKeeperServer">
+      <point x="0.0" y="-26.5" />
+      <point x="501.0" y="284.0" />
+      <point x="432.75" y="284.0" />
+      <point x="56.25" y="26.5" />
+    </edge>
+    <edge source="org.apache.zookeeper.server.quorum.LearnerZooKeeperServer" target="org.apache.zookeeper.server.quorum.QuorumZooKeeperServer">
+      <point x="0.0" y="-26.5" />
+      <point x="252.0" y="284.0" />
+      <point x="320.25" y="284.0" />
+      <point x="-56.25" y="26.5" />
+    </edge>
+    <edge source="org.apache.zookeeper.server.quorum.ObserverZooKeeperServer" target="org.apache.zookeeper.server.quorum.LearnerZooKeeperServer">
+      <point x="0.0" y="-26.5" />
+      <point x="383.0" y="387.0" />
+      <point x="310.25" y="387.0" />
+      <point x="58.25" y="26.5" />
+    </edge>
+    <edge source="org.apache.zookeeper.server.ZooKeeperServer" target="org.apache.zookeeper.server.ServerStats.Provider">
+      <point x="-43.75" y="-26.5" />
+      <point x="459.5" y="78.0" />
+      <point x="422.75" y="78.0" />
+      <point x="0.0" y="26.5" />
+    </edge>
+    <edge source="org.apache.zookeeper.server.quorum.QuorumZooKeeperServer" target="org.apache.zookeeper.server.ZooKeeperServer">
+      <point x="0.0" y="-26.5" />
+      <point x="376.5" y="181.0" />
+      <point x="459.5" y="181.0" />
+      <point x="-43.75" y="26.5" />
+    </edge>
+    <edge source="org.apache.zookeeper.server.quorum.ReadOnlyZooKeeperServer" target="org.apache.zookeeper.server.ZooKeeperServer">
+      <point x="0.0" y="-26.5" />
+      <point x="630.0" y="181.0" />
+      <point x="547.0" y="181.0" />
+      <point x="43.75" y="26.5" />
+    </edge>
+  </edges>
+  <settings layout="Hierarchic Group" zoom="1.0" x="375.5" y="232.5" />
+  <SelectedNodes>
+    <node>org.apache.zookeeper.server.quorum.LeaderZooKeeperServer</node>
+  </SelectedNodes>
+  <Categories />
+  <SCOPE>All</SCOPE>
+  <VISIBILITY>private</VISIBILITY>
+</Diagram>
+
