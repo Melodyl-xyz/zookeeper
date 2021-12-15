@@ -163,7 +163,7 @@ public class NIOServerCnxn extends ServerCnxn {
     private void readPayload() throws IOException, InterruptedException {
         if (incomingBuffer.remaining() != 0) { // have we read length bytes?
             int rc = sock.read(incomingBuffer); // sock is non-blocking, so ok
-            if (rc < 0) {
+            if (rc < 0) { // read返回-1说明客户端的数据发送完毕，并且主动的close socket。
                 throw new EndOfStreamException(
                         "Unable to read additional data from client sessionid 0x"
                         + Long.toHexString(sessionId)

@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
  * thread this will exit the system.
  */
 public class ZooKeeperCriticalThread extends ZooKeeperThread {
+    // CriticalThread 临界线程，
+    // 如果这个类以及子类出现没有捕捉的异常，会将该zkServer置为Error的状态
     private static final Logger LOG = LoggerFactory
             .getLogger(ZooKeeperCriticalThread.class);
     private final ZooKeeperServerListener listener;

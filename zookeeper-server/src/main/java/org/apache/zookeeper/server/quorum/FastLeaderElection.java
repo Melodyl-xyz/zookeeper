@@ -728,9 +728,17 @@ public class FastLeaderElection implements Election {
          *  as current zxid, but server id is higher.
          */
 
-        return ((newEpoch > curEpoch) ||
-                ((newEpoch == curEpoch) &&
-                ((newZxid > curZxid) || ((newZxid == curZxid) && (newId > curId)))));
+        // 这里判断谁是老大
+        return (
+                (newEpoch > curEpoch) ||
+                (
+                        (newEpoch == curEpoch) && (
+                                (newZxid > curZxid) || (
+                                        (newZxid == curZxid) && (newId > curId)
+                                )
+                        )
+                )
+        );
     }
 
     /**

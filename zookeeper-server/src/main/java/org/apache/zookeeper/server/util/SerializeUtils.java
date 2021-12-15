@@ -61,7 +61,7 @@ public class SerializeUtils {
         hdr.deserialize(ia, "hdr");
         bais.mark(bais.available());
         Record txn = null;
-        switch (hdr.getType()) {
+        switch (hdr.getType()) { // 最后四个字节
         case OpCode.createSession:
             // This isn't really an error txn; it just has the same
             // format. The error represents the timeout

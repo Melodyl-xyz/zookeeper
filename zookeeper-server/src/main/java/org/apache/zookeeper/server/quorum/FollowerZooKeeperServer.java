@@ -71,6 +71,7 @@ public class FollowerZooKeeperServer extends LearnerZooKeeperServer {
         commitProcessor = new CommitProcessor(finalProcessor,
                 Long.toString(getServerId()), true, getZooKeeperServerListener());
         commitProcessor.start();
+        // 这个为client连接上来的请求做处理
         firstProcessor = new FollowerRequestProcessor(this, commitProcessor);
         ((FollowerRequestProcessor) firstProcessor).start();
         syncProcessor = new SyncRequestProcessor(this,
@@ -85,6 +86,7 @@ public class FollowerZooKeeperServer extends LearnerZooKeeperServer {
         if ((request.zxid & 0xffffffffL) != 0) {
             pendingTxns.add(request);
         }
+        // FollowerZookeeper的sync中包装了 `SendAckRequestProcessor`
         syncProcessor.processRequest(request);
     }
 

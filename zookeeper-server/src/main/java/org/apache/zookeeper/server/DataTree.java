@@ -226,14 +226,14 @@ public class DataTree {
     public DataTree() {
         /* Rather than fight it, let root have an alias */
         nodes.put("", root);
-        nodes.put(rootZookeeper, root);
+        nodes.put(rootZookeeper, root); // 添加 /
 
         /** add the proc node and quota node */
         root.addChild(procChildZookeeper);
-        nodes.put(procZookeeper, procDataNode);
+        nodes.put(procZookeeper, procDataNode); // 添加 /zookeeper
 
         procDataNode.addChild(quotaChildZookeeper);
-        nodes.put(quotaZookeeper, quotaDataNode);
+        nodes.put(quotaZookeeper, quotaDataNode); // 添加 /zookeeper/quota
 
         addConfigNode();
     }
@@ -789,6 +789,7 @@ public class DataTree {
         return this.processTxn(header, txn, false);
     }
 
+    // 处理请求的地方
     public ProcessTxnResult processTxn(TxnHeader header, Record txn, boolean isSubTxn)
     {
         ProcessTxnResult rc = new ProcessTxnResult();
@@ -1240,6 +1241,10 @@ public class DataTree {
             if (lastSlash == -1) {
                 root = node;
             } else {
+                // example:
+                // path=/root/parent1/child;
+                // parentPath{path.substring(0, lastSlash)}=/root/parent1;
+                // childPath{path.substring(lastSlash + 1)}=child
                 String parentPath = path.substring(0, lastSlash);
                 DataNode parent = nodes.get(parentPath);
                 if (parent == null) {

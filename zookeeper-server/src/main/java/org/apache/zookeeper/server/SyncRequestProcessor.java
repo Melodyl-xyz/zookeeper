@@ -98,6 +98,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
     @Override
     public void run() {
         try {
+            // 计算什么时候生成快照文件和事务信息切换文件存储的标志
             int logCount = 0;
 
             // we do this in an attempt to ensure that not all of the servers
@@ -106,9 +107,9 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
             while (true) {
                 Request si = null;
                 if (toFlush.isEmpty()) {
-                    si = queuedRequests.take();
+                    si = queuedRequests.take(); // 取头部，如果队列为空，则阻塞。
                 } else {
-                    si = queuedRequests.poll();
+                    si = queuedRequests.poll(); // 取头部，如果队列为空，返回null。
                     if (si == null) {
                         flush(toFlush);
                         continue;
@@ -119,14 +120,17 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
                 }
                 if (si != null) {
                     // track the number of records written to the log
+                    // 这里的append并不会强制刷到磁盘里面去
                     if (zks.getZKDatabase().append(si)) {
                         logCount++;
                         if (logCount > (snapCount / 2 + randRoll)) {
                             randRoll = r.nextInt(snapCount/2);
                             // roll the log
+                            // 事务日志换个新的文件存储
                             zks.getZKDatabase().rollLog();
                             // take a snapshot
                             if (snapInProcess != null && snapInProcess.isAlive()) {
+                                // WARN：可监控的点
                                 LOG.warn("Too busy to snap, skipping");
                             } else {
                                 snapInProcess = new ZooKeeperThread("Snapshot Thread") {
@@ -143,6 +147,11 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
                             logCount = 0;
                         }
                     } else if (toFlush.isEmpty()) {
+                        // si.hdr == null的时候，append为false，会进入到这个分支，
+                        // 说明都是读相关请求
+                        // 这里有个优化：如果没有flush的，且都是读的，然后toFlush为空的，
+                        // 就直接调用nextProcessor去执行了，而不会等到flush的时候再去执行。
+
                         // optimization for read heavy workloads
                         // iff this is a read, and there are no pending
                         // flushes (writes), then just pass this to the next
@@ -156,6 +165,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
                         continue;
                     }
                     toFlush.add(si);
+                    // 大于1000的时候会刷新，或者上文中没有任务的时候也会刷新
                     if (toFlush.size() > 1000) {
                         flush(toFlush);
                     }
@@ -169,16 +179,20 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
         LOG.info("SyncRequestProcessor exited!");
     }
 
+    // flush才会强制写盘
     private void flush(LinkedList<Request> toFlush)
         throws IOException, RequestProcessorException
     {
         if (toFlush.isEmpty())
             return;
 
+        // 这里会强制写盘
         zks.getZKDatabase().commit();
         while (!toFlush.isEmpty()) {
             Request i = toFlush.remove();
             if (nextProcessor != null) {
+                // 在leaderZookeeperServer中nextProcessor是AckRequestProcessor
+                // 在FollowerZookeeper中nextProcessor是SendAckRequestProcessor
                 nextProcessor.processRequest(i);
             }
         }

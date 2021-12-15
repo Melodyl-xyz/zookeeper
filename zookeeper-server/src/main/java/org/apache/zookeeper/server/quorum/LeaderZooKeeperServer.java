@@ -63,6 +63,7 @@ public class LeaderZooKeeperServer extends QuorumZooKeeperServer {
 
     @Override
     protected void setupRequestProcessors() {
+        // LeaderRequestProcessor -> PrepRequestProcessor -> ProposalProcessor(SyncRequestProcessor) -> CommitProcessor -> ToBeAppliedRequestProcessor -> FinalRequestProcessor
         RequestProcessor finalProcessor = new FinalRequestProcessor(this);
         RequestProcessor toBeAppliedProcessor = new Leader.ToBeAppliedRequestProcessor(finalProcessor, getLeader());
         commitProcessor = new CommitProcessor(toBeAppliedProcessor,
@@ -88,6 +89,9 @@ public class LeaderZooKeeperServer extends QuorumZooKeeperServer {
 
     @Override
     public synchronized void startup() {
+        // 调用了ZookeeperServer的setupRequestProcessors，
+        // 但是LeaderZookeeperServer会覆盖这个方法，
+        // 因此是调用本地的setupRequestProcessors。
         super.startup();
         if (containerManager != null) {
             containerManager.start();

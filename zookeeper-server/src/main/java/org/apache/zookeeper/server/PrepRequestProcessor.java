@@ -129,6 +129,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
     }
     @Override
     public void run() {
+        // zkServer: PrepRequestProcessor单例操作
         LOG.info(String.format("PrepRequestProcessor (sid:%d) started, reconfigEnabled=%s", zks.getServerId(), zks.reconfigEnabled));
         try {
             while (true) {
@@ -156,6 +157,9 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
         LOG.info("PrepRequestProcessor exited loop!");
     }
 
+    /*
+     * 根据Path获取其ChangeRecord，正在变化的内容，如果没有找到返回NoNodeExceptions
+     */
     private ChangeRecord getRecordForPath(String path) throws KeeperException.NoNodeException {
         ChangeRecord lastChange = null;
         synchronized (zks.outstandingChanges) {
@@ -350,15 +354,19 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
      * This method will be called inside the ProcessRequestThread, which is a
      * singleton, so there will be a single thread calling this code.
      *
-     * @param type
-     * @param zxid
-     * @param request
-     * @param record
+     * parse Request To Txn
+     * @param type 请求的类型，与 {@link ZooDefs.OpCode} 对应
+     * @param zxid zookeeper Server的下一个事务ID
+     * @param request 用户的请求报文
+     * @param record 将请求转为对应的Record
+     * @param deserialize 是否将request序列化为record
      */
     protected void pRequest2Txn(int type, long zxid, Request request,
                                 Record record, boolean deserialize)
         throws KeeperException, IOException, RequestProcessorException
     {
+        // 注意：这里会设置TxnHeader进来，request起初TxnHeader是null的。
+        // 因此，我们可以通过TxnHeader判断是否为读请求
         request.setHdr(new TxnHeader(request.sessionId, request.cxid, zxid,
                 Time.currentWallTime(), type));
 
@@ -367,6 +375,10 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
             case OpCode.create2:
             case OpCode.createTTL:
             case OpCode.createContainer: {
+                // 这里主要是进行必要的检查，
+                // 将request转化为ChangeRecord，
+                // 然后将request添加到outstandingQueue的队列中
+                // 注意，这里request传入，丰富了request的Codec：txn
                 pRequest2TxnCreate(type, request, record, deserialize);
                 break;
             }
@@ -578,6 +590,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
                 request.setTxn(new CreateSessionTxn(to));
                 request.request.rewind();
                 if (request.isLocalSession()) {
+                    // localSessionsEnabled配置开了之后，就区分localSession和GlobalSession
                     // This will add to local session tracker if it is enabled
                     zks.sessionTracker.addSession(request.sessionId, to);
                 } else {
@@ -629,11 +642,13 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
 
     private void pRequest2TxnCreate(int type, Request request, Record record, boolean deserialize) throws IOException, KeeperException {
         if (deserialize) {
+            // 报文序列化为Record
             ByteBufferInputStream.byteBuffer2Record(request.request, record);
         }
 
-        int flags;
-        String path;
+        // 确定request中的所有变量
+        int flags; // 对应创建的模式OpCode.createXXX
+        String path; // 对应的是路径
         List<ACL> acl;
         byte[] data;
         long ttl;
@@ -652,31 +667,39 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
             data = createRequest.getData();
             ttl = -1;
         }
+        // 确定CreateMode
         CreateMode createMode = CreateMode.fromFlag(flags);
+        // 检查请求参数
         validateCreateRequest(path, createMode, request, ttl);
+        // 检查ParentPath相关
         String parentPath = validatePathForCreate(path, request.sessionId);
-
         List<ACL> listACL = fixupACL(path, request.authInfo, acl);
         ChangeRecord parentRecord = getRecordForPath(parentPath);
-
         checkACL(zks, parentRecord.acl, ZooDefs.Perms.CREATE, request.authInfo);
+        // 修正新的Path，准备检查Path
         int parentCVersion = parentRecord.stat.getCversion();
         if (createMode.isSequential()) {
             path = path + String.format(Locale.ENGLISH, "%010d", parentCVersion);
         }
+        // 检查Path字符串的合法性，这里sessionID传入是为了日志打印
         validatePath(path, request.sessionId);
+        // 验证是否存在该Path
         try {
+            // 根据Path获取其ChangeRecord，正在变化的内容，如果没有找到返回NoNodeException
             if (getRecordForPath(path) != null) {
                 throw new KeeperException.NodeExistsException(path);
             }
         } catch (KeeperException.NoNodeException e) {
             // ignore this one
+            // 到了这里就代表确实没找到
         }
         boolean ephemeralParent = EphemeralType.get(parentRecord.stat.getEphemeralOwner()) == EphemeralType.NORMAL;
         if (ephemeralParent) {
             throw new KeeperException.NoChildrenForEphemeralsException(path);
         }
+        // 直接加1，是因为只有一个线程在操作
         int newCversion = parentRecord.stat.getCversion()+1;
+        // 这里配置对应的codec
         if (type == OpCode.createContainer) {
             request.setTxn(new CreateContainerTxn(path, data, listACL, newCversion));
         } else if (type == OpCode.createTTL) {
@@ -685,6 +708,8 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
             request.setTxn(new CreateTxn(path, data, listACL, createMode.isEphemeral(),
                     newCversion));
         }
+        // 生成父子更新zxid的ChangeRecord，
+        // 然后添加到outstandingChanges和其索引outstandingChangesForPath中
         StatPersisted s = new StatPersisted();
         if (createMode.isEphemeral()) {
             s.setEphemeralOwner(request.sessionId);
@@ -730,6 +755,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
      *
      * @param request
      */
+    // 只有一个线程操作操作，所以这里面都是单例
     protected void pRequest(Request request) throws RequestProcessorException {
         // LOG.info("Prep>>> cxid = " + request.cxid + " type = " +
         // request.type + " id = 0x" + Long.toHexString(request.sessionId));
@@ -771,6 +797,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
                 pRequest2Txn(request.type, zks.getNextZxid(), request, checkRequest, true);
                 break;
             case OpCode.multi:
+                // 可以一次发送多个请求出去
                 MultiTransactionRecord multiRequest = new MultiTransactionRecord();
                 try {
                     ByteBufferInputStream.byteBuffer2Record(request.request, multiRequest);
@@ -1001,6 +1028,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
     }
 
     public void processRequest(Request request) {
+        // 塞到队列里面，然后返回，该线程会不断的消费request
         submittedRequests.add(request);
     }
 

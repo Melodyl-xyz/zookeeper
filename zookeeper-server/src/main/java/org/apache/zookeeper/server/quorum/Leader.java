@@ -400,7 +400,9 @@ public class Leader {
 
                         BufferedInputStream is = new BufferedInputStream(
                                 s.getInputStream());
+                        // 接收到了follower的连接请求
                         LearnerHandler fh = new LearnerHandler(s, is, Leader.this);
+                        // 启动一个learnHandler与之对应
                         fh.start();
                     } catch (SocketException e) {
                         error = true;
@@ -777,6 +779,7 @@ public class Leader {
        // in order to be committed, a proposal must be accepted by a quorum.
        //
        // getting a quorum from all necessary configurations.
+        // 检验是否通过本轮选举或事务投票
         if (!p.hasAllQuorums()) {
            return false;
         }
@@ -824,6 +827,7 @@ public class Leader {
             informAndActivate(p, designatedLeader);
             //turnOffFollowers();
         } else {
+            // 通知follower提交
             commit(zxid);
             inform(p);
         }
@@ -889,6 +893,7 @@ public class Leader {
             return;
         }
 
+        // Leader提交，允许单个sid重复调用，但是只会增加一票
         p.addAck(sid);
         /*if (LOG.isDebugEnabled()) {
             LOG.debug("Count for zxid: 0x{} is {}",
@@ -949,6 +954,7 @@ public class Leader {
          * @see org.apache.zookeeper.server.RequestProcessor#processRequest(org.apache.zookeeper.server.Request)
          */
         public void processRequest(Request request) throws RequestProcessorException {
+            // FinalRequestProcessor来处理请求
             next.processRequest(request);
 
             // The only requests that should be on toBeApplied are write

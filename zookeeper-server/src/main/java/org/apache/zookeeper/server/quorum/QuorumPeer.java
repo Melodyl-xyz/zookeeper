@@ -523,12 +523,22 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
      * Whether learners in this quorum should create new sessions as local.
      * False by default to preserve existing behavior.
      */
+    /*
+     https://issues.apache.org/jira/browse/ZOOKEEPER-1147
+     启用localSessionsUpgradingEnabled时：
+     本地会话可以自动升级到全局会话。
+     创建新会话后，它将被本地保存在已包装的LocalSessionTracker中。
+     随后可以根据需要将其升级到全局会话（例如，创建临时节点）。如果请求升级，则将会话从本地集合中删除，同时保留相同的会话ID。
+     */
     protected boolean localSessionsEnabled = false;
 
     /**
      * Whether learners in this quorum should upgrade local sessions to
      * global. Only matters if local sessions are enabled.
      */
+    /*
+    是否开启升级
+    */
     protected boolean localSessionsUpgradingEnabled = true;
 
     /**
@@ -1266,7 +1276,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                     LOG.info("LEADING");
                     try {
                         setLeader(makeLeader(logFactory));
-                        leader.lead();
+                        leader.lead(); // 这里会不断循环
                         setLeader(null);
                     } catch (Exception e) {
                         LOG.warn("Unexpected exception",e);
@@ -1780,6 +1790,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
 
     private void startServerCnxnFactory() {
         if (cnxnFactory != null) {
+            // Connect: 0. 启动CnxnFactory
             cnxnFactory.start();
         }
         if (secureCnxnFactory != null) {

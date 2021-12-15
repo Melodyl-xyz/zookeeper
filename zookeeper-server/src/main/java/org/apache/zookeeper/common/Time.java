@@ -29,6 +29,7 @@ public class Time {
      * all of ZK assumes that time is measured in milliseconds.
      * @return  The time in milliseconds from some arbitrary point in time.
      */
+    // 用System.nanoTime()来作为整个zk的时间维度
     public static long currentElapsedTime() {
         return System.nanoTime() / 1000000;
     }

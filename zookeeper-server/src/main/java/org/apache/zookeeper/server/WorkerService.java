@@ -114,6 +114,7 @@ public class WorkerService {
             return;
         }
 
+        // ScheduledWorkRequest是runnable的，所以worker是运行该请求
         ScheduledWorkRequest scheduledWorkRequest =
             new ScheduledWorkRequest(workRequest);
 
@@ -125,6 +126,7 @@ public class WorkerService {
                 // make sure to map negative ids as well to [0, size-1]
                 int workerNum = ((int) (id % size) + size) % size;
                 ExecutorService worker = workers.get(workerNum);
+                // Connect: 4. 线程池处理Req
                 worker.execute(scheduledWorkRequest);
             } catch (RejectedExecutionException e) {
                 LOG.warn("ExecutorService rejected execution", e);

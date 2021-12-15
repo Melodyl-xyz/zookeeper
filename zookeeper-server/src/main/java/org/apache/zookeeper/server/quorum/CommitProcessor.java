@@ -176,9 +176,10 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
                        !isProcessingCommit() &&
                        (request = queuedRequests.poll()) != null) {
                     if (needCommit(request)) {
+                        // 事务请求放入nextPending
                         nextPending.set(request);
                     } else {
-                        sendToNextProcessor(request);
+                        sendToNextProcessor(request);// 这里面会执行 numRequestsProcessing++
                     }
                 }
 
@@ -202,8 +203,12 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
     protected void processCommitted() {
         Request request;
 
+        // proposal提交的内容是不会进入到该函数内部的
+        // 因为，committedRequest里面的内容为空
         if (!stopped && !isProcessingRequest() &&
                 (committedRequests.peek() != null)) {
+            // numRequestsProcessing == 0
+            // committedRequests.peek() != null
 
             /*
              * ZOOKEEPER-1863: continue only if there is no new request
@@ -211,6 +216,8 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
              * commit. 
              */
             if ( !isWaitingForCommit() && !queuedRequests.isEmpty()) {
+                // nextPending == null
+                // !queuedRequests.isEmpty()
                 return;
             }
             request = committedRequests.poll();
@@ -299,6 +306,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
             } finally {
                 // If this request is the commit request that was blocking
                 // the processor, clear.
+                // 清空currentlyCommitting的内容
                 currentlyCommitting.compareAndSet(request, null);
 
                 /*
@@ -307,6 +315,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
                  * to drain. In that case, wake it up if there are pending
                  * requests.
                  */
+                // 减少numRequestProcessing的数量
                 if (numRequestsProcessing.decrementAndGet() == 0) {
                     if (!queuedRequests.isEmpty() ||
                         !committedRequests.isEmpty()) {
@@ -345,7 +354,9 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
         }
         queuedRequests.add(request);
         if (!isWaitingForCommit()) {
-            wakeup();
+            // nextPending == null
+            // 没有等待提交
+            wakeup(); // run()里面的wait会被notify
         }
     }
 

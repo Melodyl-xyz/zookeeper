@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
  */
 @InterfaceAudience.Public
 public enum CreateMode {
-    
+    // 所有可以创建的节点的类型
     /**
      * The znode will not be automatically deleted upon client's disconnect.
      */

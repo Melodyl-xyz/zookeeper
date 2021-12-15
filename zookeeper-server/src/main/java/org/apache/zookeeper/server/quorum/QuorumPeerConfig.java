@@ -72,10 +72,10 @@ public class QuorumPeerConfig {
     protected boolean sslQuorum = false;
     protected boolean shouldUsePortUnification = false;
     protected boolean sslQuorumReloadCertFiles = false;
-    protected File dataDir;
-    protected File dataLogDir;
+    protected File dataDir; // 快照日志目录
+    protected File dataLogDir; // 事务日志目录
     protected String dynamicConfigFileStr = null;
-    protected String configFileStr = null;
+    protected String configFileStr = null; // zoo.cfg的字符串
     protected int tickTime = ZooKeeperServer.DEFAULT_TICK_TIME;
     protected int maxClientCnxns = 60;
     /** defaults to -1 if not set explicitly */
@@ -91,6 +91,7 @@ public class QuorumPeerConfig {
     protected int electionPort = 2182;
     protected boolean quorumListenOnAllIPs = false;
 
+    // myId
     protected long serverId = UNSET_SERVERID;
 
     protected QuorumVerifier quorumVerifier = null, lastSeenQuorumVerifier = null;
@@ -245,8 +246,10 @@ public class QuorumPeerConfig {
             String key = entry.getKey().toString().trim();
             String value = entry.getValue().toString().trim();
             if (key.equals("dataDir")) {
+                // value是快照日志的目录
                 dataDir = vff.create(value);
             } else if (key.equals("dataLogDir")) {
+                // value是事务日志的目录
                 dataLogDir = vff.create(value);
             } else if (key.equals("clientPort")) {
                 clientPort = Integer.parseInt(value);
@@ -790,6 +793,9 @@ public class QuorumPeerConfig {
         return Collections.unmodifiableMap(quorumVerifier.getAllMembers());
     }
 
+    /**
+     *  myId
+     */
     public long getServerId() { return serverId; }
 
     public boolean isDistributed() {

@@ -71,7 +71,7 @@ public class ZKDatabase {
      * all these members.
      */
     protected DataTree dataTree;
-    protected ConcurrentHashMap<Long, Integer> sessionsWithTimeouts;
+    protected ConcurrentHashMap<Long, Integer> sessionsWithTimeouts; // key: sessionId, value: timeout； long 八个字节，64位
     protected FileTxnSnapLog snapLog;
     protected long minCommittedLog, maxCommittedLog;
 
@@ -95,7 +95,7 @@ public class ZKDatabase {
      * @param snapLog the FileTxnSnapLog mapping this zkdatabase
      */
     public ZKDatabase(FileTxnSnapLog snapLog) {
-        dataTree = createDataTree();
+        dataTree = createDataTree(); // 创建DataTree的时候就会把元数据节点创建上去
         sessionsWithTimeouts = new ConcurrentHashMap<Long, Integer>();
         this.snapLog = snapLog;
 

@@ -155,6 +155,7 @@ public class Learner {
      */
     void readPacket(QuorumPacket pp) throws IOException {
         synchronized (leaderIs) {
+            // 底层调用是socketInputStream.read，会阻塞
             leaderIs.readRecord(pp, "packet");
         }
         if (LOG.isTraceEnabled()) {

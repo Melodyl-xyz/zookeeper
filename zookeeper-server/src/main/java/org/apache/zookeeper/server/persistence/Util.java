@@ -165,6 +165,7 @@ public class Util {
             // including the header and the last / bytes
             // the snapshot should be at least 10 bytes
             if (raf.length() < 10) {
+                // 至少10bytes
                 return false;
             }
             raf.seek(raf.length() - 5);
@@ -202,6 +203,7 @@ public class Util {
      */
     public static byte[] readTxnBytes(InputArchive ia) throws IOException {
         try{
+            // todo melody 这个看起来是txnEntry，实际tag目前也没起到作用
             byte[] bytes = ia.readBuffer("txtEntry");
             // Since we preallocate, we define EOF to be an
             // empty transaction

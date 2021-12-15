@@ -109,6 +109,7 @@ public class FinalRequestProcessor implements RequestProcessor {
         ProcessTxnResult rc = null;
         synchronized (zks.outstandingChanges) {
             // Need to process local session requests
+            // 这里zkDatabase的Datatree会变
             rc = zks.processTxn(request);
 
             // request.hdr is set for write requests, which are the only ones
@@ -193,6 +194,7 @@ public class FinalRequestProcessor implements RequestProcessor {
                 cnxn.updateStatsForResponse(request.cxid, request.zxid, lastOp,
                         request.createTime, Time.currentElapsedTime());
 
+                // PING的事务ID为-2
                 cnxn.sendResponse(new ReplyHeader(-2,
                         zks.getZKDatabase().getDataTreeLastProcessedZxid(), 0), null, "response");
                 return;

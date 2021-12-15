@@ -210,10 +210,11 @@ public class FileTxnLog implements TxnLog, Closeable {
      */
     /*
     这个方法只是调用了flush去写入，并不能保证一定落盘了。
+    commit方法会强制落盘
     */
     public synchronized boolean append(TxnHeader hdr, Record txn)
             throws IOException {
-        if (hdr == null) {
+        if (hdr == null) { // 非事务请求
             return false;
         }
         if (hdr.getZxid() <= lastZxidSeen) {
@@ -223,12 +224,13 @@ public class FileTxnLog implements TxnLog, Closeable {
         } else {
             lastZxidSeen = hdr.getZxid();
         }
-        if (logStream == null) {
+        if (logStream == null) { // 初始化的时候或者调用rollLog的时候
             if (LOG.isInfoEnabled()) {
                 LOG.info("Creating new log file: " + Util.makeLogName(hdr.getZxid()));
             }
 
-            // 创建logDir/logName文件
+            // 创建 "logDir/logName" 文件，
+            // 将file包装为 BinaryOutputArchive
             logFileWrite = new File(logDir, Util.makeLogName(hdr.getZxid()));
             fos = new FileOutputStream(logFileWrite);
             logStream = new BufferedOutputStream(fos);
@@ -240,17 +242,22 @@ public class FileTxnLog implements TxnLog, Closeable {
             // Make sure that the magic number is written before padding.
             logStream.flush(); // 创建事务日志，并且写入了一个fileHeader
             filePadding.setCurrentSize(fos.getChannel().position());
-            streamsToFlush.add(fos); // 将由当前的logDir创建的fileChannel放在streamToFlush里面
+            // 将由logDir创建的fileChannel放在streamToFlush的链表里面，
+            // 如果没有
+            streamsToFlush.add(fos);
         }
         filePadding.padFile(fos.getChannel()); // 填充文件
-        byte[] buf = Util.marshallTxnEntry(hdr, txn);
+        byte[] buf = Util.marshallTxnEntry(hdr, txn); // 使用txn，配合hdr将request序列化为buff
         if (buf == null || buf.length == 0) {
             throw new IOException("Faulty serialization for header " +
                     "and txn");
         }
+        // 计算crc校验并写到 BinaryOutputArchive 中
         Checksum crc = makeChecksumAlgorithm();
         crc.update(buf, 0, buf.length);
         oa.writeLong(crc.getValue(), "txnEntryCRC");
+        // 将 byte 写入 txnEntry 中
+        // 末尾写入EOR
         Util.writeTxnBytes(oa, buf);
 
         return true;
@@ -361,19 +368,23 @@ public class FileTxnLog implements TxnLog, Closeable {
         if (logStream != null) {
             logStream.flush();
         }
+        // 顺序flush，旧的最先开始flush
         for (FileOutputStream log : streamsToFlush) {
             log.flush();
             if (forceSync) {
+                // 强制刷盘
                 long startSyncNS = System.nanoTime();
 
                 FileChannel channel = log.getChannel();
                 channel.force(false);
 
+                // 打印warning
                 syncElapsedMS = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startSyncNS);
                 if (syncElapsedMS > fsyncWarningThresholdMS) {
                     if (serverStats != null) {
                         serverStats.incrementFsyncThresholdExceedCount();
                     }
+                    // WARN：可监控的点
                     LOG.warn("fsync-ing the write ahead log in "
                             + Thread.currentThread().getName()
                             + " took " + syncElapsedMS
@@ -383,6 +394,7 @@ public class FileTxnLog implements TxnLog, Closeable {
                 }
             }
         }
+        // 删的只剩下最新的那一个
         while (streamsToFlush.size() > 1) {
             streamsToFlush.removeFirst().close();
         }
@@ -653,7 +665,7 @@ public class FileTxnLog implements TxnLog, Closeable {
                     break;
                 }
             }
-            // 去下个文件
+            // 调整指针，去下个文件
             goToNextLog(); // this.ia; this.logFile; this.inputStream赋值
             // 确定这个文件该读取的TxnHeader、record
             next();

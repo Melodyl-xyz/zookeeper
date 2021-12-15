@@ -528,7 +528,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         IOWorkRequest(SelectorThread selectorThread, SelectionKey key) {
             this.selectorThread = selectorThread;
             this.key = key;
-            this.cnxn = (NIOServerCnxn) key.attachment();
+                this.cnxn = (NIOServerCnxn) key.attachment();
         }
 
         public void doWork() throws InterruptedException {
