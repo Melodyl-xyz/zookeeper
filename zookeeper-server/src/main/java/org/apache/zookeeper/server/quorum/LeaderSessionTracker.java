@@ -133,6 +133,7 @@ public class LeaderSessionTracker extends UpgradeableSessionTracker {
         return sessionId >> 56;
     }
 
+    // 检查session
     public void checkSession(long sessionId, Object owner)
             throws SessionExpiredException, SessionMovedException,
             UnknownSessionException {

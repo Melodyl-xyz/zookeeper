@@ -130,6 +130,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
         return currentlyCommitting.get() != null;
     }
 
+    // 判断一个request是否需要经过zab
     protected boolean needCommit(Request request) {
         switch (request.type) {
             case OpCode.create:

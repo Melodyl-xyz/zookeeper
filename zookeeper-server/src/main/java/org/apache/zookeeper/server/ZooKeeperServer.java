@@ -960,6 +960,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         return minSessionTimeout;
     }
 
+    // session协商：设置为tickTime的2倍
     public void setMinSessionTimeout(int min) {
         this.minSessionTimeout = min == -1 ? tickTime * 2 : min;
         LOG.info("minSessionTimeout set to {}", this.minSessionTimeout);
@@ -969,6 +970,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         return maxSessionTimeout;
     }
 
+    // session协商：设置tickTime的20倍
     public void setMaxSessionTimeout(int max) {
         this.maxSessionTimeout = max == -1 ? tickTime * 20 : max;
         LOG.info("maxSessionTimeout set to {}", this.maxSessionTimeout);

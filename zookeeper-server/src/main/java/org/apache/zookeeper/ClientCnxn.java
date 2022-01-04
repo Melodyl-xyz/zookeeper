@@ -1175,8 +1175,10 @@ public class ClientCnxn {
                                 }
                             }
                         }
+                        // 检查读是否超时了
                         to = readTimeout - clientCnxnSocket.getIdleRecv();
                     } else {
+                        // 检查是否连接超时了
                         to = connectTimeout - clientCnxnSocket.getIdleRecv();
                     }
                     
