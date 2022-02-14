@@ -873,6 +873,10 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
             case OpCode.createSession:
             case OpCode.closeSession:
                 if (!request.isLocalSession()) {
+                    // 三个行为：
+                    // 1. request.setTxn(new CreateSessionTxn(to));
+                    // 2. zks.sessionTracker.addGlobalSession(request.sessionId, to);
+                    // 3. sessionTracker.setOwner(id, owner);
                     pRequest2Txn(request.type, zks.getNextZxid(), request,
                                  null, true);
                 }

@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 public class LearnerSessionTracker extends UpgradeableSessionTracker {
     private static final Logger LOG = LoggerFactory.getLogger(LearnerSessionTracker.class);
 
+    // learner的expirer 不做任何事情
     private final SessionExpirer expirer;
     // Touch table for the global sessions
     private final AtomicReference<Map<Long, Integer>> touchTable =

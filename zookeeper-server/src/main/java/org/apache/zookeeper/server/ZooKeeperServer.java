@@ -838,7 +838,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             touch(si.cnxn);
             boolean validpacket = Request.isValid(si.type);
             if (validpacket) {
-                // firstProcessor通常是PrepRequestProcessor，processRequest是异步塞入队列后就返回的调用
+                // firstProcessor在Leader中通常是PrepRequestProcessor，processRequest是异步塞入队列后就返回的调用
                 // 一个ZookeeperServer只有一个PrepRequestProcessor，这里面的操作都是单例的
                 firstProcessor.processRequest(si);
                 if (si.cnxn != null) {
@@ -1091,6 +1091,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
                     connReq.getTimeOut(),
                     cnxn.getRemoteSocketAddress());
         } else {
+            // 通常是client断连了A，重连到了B的时候出现这种情况
             long clientSessionId = connReq.getSessionId();
             LOG.debug("Client attempting to renew session:" +
                             " session = 0x{}, zxid = 0x{}, timeout = {}, address = {}",

@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
 public abstract class UpgradeableSessionTracker implements SessionTracker {
     private static final Logger LOG = LoggerFactory.getLogger(UpgradeableSessionTracker.class);
 
-    private ConcurrentMap<Long, Integer> localSessionsWithTimeouts;
+    private ConcurrentMap<Long, Integer> localSessionsWithTimeouts; // key: SessionId, value: Time
     protected LocalSessionTracker localSessionTracker;
 
     public void start() {}

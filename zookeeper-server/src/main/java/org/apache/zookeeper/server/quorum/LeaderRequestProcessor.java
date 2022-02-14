@@ -51,6 +51,7 @@ public class LeaderRequestProcessor implements RequestProcessor {
             throws RequestProcessorException {
         // Check if this is a local session and we are trying to create
         // an ephemeral node, in which case we upgrade the session
+        // 如果确实需要升级，就创建一个 createSession 请求，
         Request upgradeRequest = null;
         try {
             upgradeRequest = lzks.checkUpgradeSession(request);

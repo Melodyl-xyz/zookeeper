@@ -74,7 +74,7 @@ public class FilePadding {
      * @throws IOException
      */
     /*
-    其作用是当文件大小不满64MB时，向文件填充0以达到64MB大小。
+    其作用是当文件大小不满64MB时，向文件最后的位置填充0以达到文件逻辑占用64MB大小。
     */
     long padFile(FileChannel fileChannel) throws IOException {
         long newFileSize = calculateFileSizeWithPadding(fileChannel.position(), currentSize, preAllocSize);

@@ -527,6 +527,7 @@ public class ClientCnxn {
 
        private void processEvent(Object event) {
           try {
+              // event执行回调的地方
               if (event instanceof WatcherSetEventPair) {
                   // each watcher will process the event
                   WatcherSetEventPair pair = (WatcherSetEventPair) event;
@@ -808,6 +809,7 @@ public class ClientCnxn {
         private Random r = new Random();
         private boolean isFirstConnect = true;
 
+        // 处理接收到的报文
         void readResponse(ByteBuffer incomingBuffer) throws IOException {
             ByteBufferInputStream bbis = new ByteBufferInputStream(
                     incomingBuffer);

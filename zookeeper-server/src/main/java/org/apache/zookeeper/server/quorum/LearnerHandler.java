@@ -534,6 +534,7 @@ public class LearnerHandler extends ZooKeeperThread {
             LOG.debug("Sending UPTODATE message to " + sid);      
             queuedPackets.add(new QuorumPacket(Leader.UPTODATE, -1, null, null));
 
+            // 执行leader的事宜
             while (true) {
                 qp = new QuorumPacket();
                 ia.readRecord(qp, "packet");

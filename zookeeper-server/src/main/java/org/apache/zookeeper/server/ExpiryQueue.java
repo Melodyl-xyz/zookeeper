@@ -53,6 +53,7 @@ public class ExpiryQueue<E> {
         nextExpirationTime.set(roundToNextInterval(Time.currentElapsedTime()));
     }
 
+    // 获取下次超时时间，确定桶的编号
     private long roundToNextInterval(long time) {
         return (time / expirationInterval + 1) * expirationInterval;
     }
@@ -87,8 +88,10 @@ public class ExpiryQueue<E> {
     public Long update(E elem, int timeout) {
         Long prevExpiryTime = elemMap.get(elem);
         long now = Time.currentElapsedTime();
+        // timeout后超时，这里要求now和每次poll的时间频率差不多，
         Long newExpiryTime = roundToNextInterval(now + timeout);
 
+        // 更新的时间不影响其所在桶的位置，就忽略
         if (newExpiryTime.equals(prevExpiryTime)) {
             // No change, so nothing to update
             return null;
@@ -96,12 +99,13 @@ public class ExpiryQueue<E> {
 
         // First add the elem to the new expiry time bucket in expiryMap.
         Set<E> set = expiryMap.get(newExpiryTime);
-        if (set == null) {
+        if (set == null) {// 第一次创建这个编号
             // Construct a ConcurrentHashSet using a ConcurrentHashMap
             set = Collections.newSetFromMap(
                 new ConcurrentHashMap<E, Boolean>());
             // Put the new set in the map, but only if another thread
             // hasn't beaten us to it
+            // 防止有其他线程也创建了一个set，如果有就直接使用这个set
             Set<E> existingSet = expiryMap.putIfAbsent(newExpiryTime, set);
             if (existingSet != null) {
                 set = existingSet;
@@ -111,6 +115,8 @@ public class ExpiryQueue<E> {
 
         // Map the elem to the new expiry time. If a different previous
         // mapping was present, clean up the previous expiry bucket.
+        // 放置这个成员到eleMap中的时候发现之前存储过，那么说明这个成员变量之前存在
+        // 那么就需要删除之前存在的记录，保证expiryMap的set中该成员只有一条记录
         prevExpiryTime = elemMap.put(elem, newExpiryTime);
         if (prevExpiryTime != null && !newExpiryTime.equals(prevExpiryTime)) {
             Set<E> prevSet = expiryMap.get(prevExpiryTime);
@@ -146,6 +152,7 @@ public class ExpiryQueue<E> {
         }
 
         Set<E> set = null;
+        // nextExpirationTime的更新是由expirationInterval来决定的，而不是当前时间决定的。
         long newExpirationTime = expirationTime + expirationInterval;
         if (nextExpirationTime.compareAndSet(
               expirationTime, newExpirationTime)) {
