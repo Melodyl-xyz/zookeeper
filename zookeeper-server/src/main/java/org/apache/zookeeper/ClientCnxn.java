@@ -894,6 +894,7 @@ public class ClientCnxn {
                 }
                 packet = pendingQueue.remove();
             }
+            // 这是重点：不需要做request和response的一一映射！！！，因为是按序的
             /*
              * Since requests are processed in order, we better get a response
              * to the first request!
@@ -1507,6 +1508,7 @@ public class ClientCnxn {
         if (xid == Integer.MAX_VALUE) {
             xid = 1;
         }
+        // xid自增
         return xid++;
     }
 

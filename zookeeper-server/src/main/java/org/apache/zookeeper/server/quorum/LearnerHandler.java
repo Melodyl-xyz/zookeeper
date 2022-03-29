@@ -696,11 +696,12 @@ public class LearnerHandler extends ZooKeeperThread {
         boolean isPeerNewEpochZxid = (peerLastZxid & 0xffffffffL) == 0;
         // Keep track of the latest zxid which already queued
         long currentZxid = peerLastZxid;
-        boolean needSnap = true;
+        boolean needSnap = true; // 是否需要快照
         boolean txnLogSyncEnabled = db.isTxnLogSyncEnabled();
         ReentrantReadWriteLock lock = db.getLogLock();
         ReadLock rl = lock.readLock();
         try {
+            // 获取锁
             rl.lock();
             long maxCommittedLog = db.getmaxCommittedLog();
             long minCommittedLog = db.getminCommittedLog();

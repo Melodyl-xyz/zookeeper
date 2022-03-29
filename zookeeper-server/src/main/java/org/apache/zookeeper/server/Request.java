@@ -60,6 +60,7 @@ public class Request {
 
     public final long sessionId;
 
+    // client发送的自增ID
     public final int cxid;
 
     public final int type;

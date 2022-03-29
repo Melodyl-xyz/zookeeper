@@ -114,6 +114,7 @@ public class FinalRequestProcessor implements RequestProcessor {
 
             // request.hdr is set for write requests, which are the only ones
             // that add to outstandingChanges.
+            // hdr(TxnHeader) 这个用来区分是读还是写，我们可以从这个hdr中获取zxid
             if (request.getHdr() != null) {
                 TxnHeader hdr = request.getHdr();
                 Record txn = request.getTxn();

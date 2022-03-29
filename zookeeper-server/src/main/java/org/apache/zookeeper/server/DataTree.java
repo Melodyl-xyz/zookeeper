@@ -1217,6 +1217,7 @@ public class DataTree {
 
     public void serialize(OutputArchive oa, String tag) throws IOException {
         aclCache.serialize(oa);
+        // 这里的入口是空格
         serializeNode(oa, new StringBuilder(""));
         // / marks end of stream
         // we need to check if clear had been called in between the snapshot.

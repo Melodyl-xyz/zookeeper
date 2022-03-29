@@ -91,6 +91,7 @@ public class QuorumCnxManager {
     static final int RECV_CAPACITY = 100;
     // Initialized to 1 to prevent sending
     // stale notifications to peers
+    // 初始化为1以防止向对等方发送过时通知
     static final int SEND_CAPACITY = 1;
 
     static final int PACKETMAXSIZE = 1024 * 512;
@@ -138,8 +139,10 @@ public class QuorumCnxManager {
 
     /*
      * Mapping from Peer to Thread number
+     * key: 其他的server的myid
      */
     final ConcurrentHashMap<Long, SendWorker> senderWorkerMap;
+    // value：长度为1的queue，sendWorker不断的从这个queue中获取属于自己的一份，然后发送出去
     final ConcurrentHashMap<Long, ArrayBlockingQueue<ByteBuffer>> queueSendMap;
     final ConcurrentHashMap<Long, ByteBuffer> lastMessageSent;
 
@@ -343,7 +346,7 @@ public class QuorumCnxManager {
      *
      * @param sid
      */
-    public void testInitiateConnection(long sid) {
+    public void testInitiateConnection(long sid) {  // 测试使用
         LOG.debug("Opening channel to server " + sid);
         initiateConnection(self.getVotingView().get(sid).electionAddr, sid);
     }
@@ -405,6 +408,8 @@ public class QuorumCnxManager {
             return true;
         }
         try {
+            // 如果连上了，交由其它线程处理来处理连接
+            // 连接真的跑起来了之后，会从inprogress中删除
             connectionExecutor.execute(new QuorumConnectionReqThread(electionAddr, sid));
             connectionThreadCnt.incrementAndGet();
         } catch (Throwable e) {
@@ -453,6 +458,7 @@ public class QuorumCnxManager {
 
             // Sending id and challenge
             // represents protocol version (in other words - message type)
+            // 发送自己的协议+myid+地址
             dout.writeLong(PROTOCOL_VERSION);
             dout.writeLong(self.getId());
             String addr = formatInetAddr(self.getElectionAddress());
@@ -485,10 +491,9 @@ public class QuorumCnxManager {
             LOG.debug("Have larger server identifier, so keeping the connection: (myId:{} --> sid:{})", self.getId(), sid);
             SendWorker sw = new SendWorker(sock, sid);
             RecvWorker rw = new RecvWorker(sock, din, sid, sw);
-            sw.setRecv(rw);
+            sw.setRecv(rw); // 为毛不再构造函数里面创建
 
             SendWorker vsw = senderWorkerMap.get(sid);
-
             if(vsw != null)
                 vsw.finish();
 
@@ -567,6 +572,7 @@ public class QuorumCnxManager {
         Long sid = null, protocolVersion = null;
         InetSocketAddress electionAddr = null;
 
+        // 确定sid和electionAddr
         try {
             protocolVersion = din.readLong();
             if (protocolVersion >= 0) { // this is a server id and not a protocol version
@@ -601,6 +607,7 @@ public class QuorumCnxManager {
         authServer.authenticate(sock, din);
         //If wins the challenge, then close the new connection.
         if (sid < self.getId()) {
+            // 自己的id比对端的大，要关掉这个连接，自己主动去连接
             /*
              * This replica might still believe that the connection to sid is
              * up, so we have to shut down the workers before trying to open a
@@ -608,14 +615,14 @@ public class QuorumCnxManager {
              */
             SendWorker sw = senderWorkerMap.get(sid);
             if (sw != null) {
-                sw.finish();
+                sw.finish(); // sendworker结束自己
             }
 
             /*
              * Now we start a new connection
              */
             LOG.debug("Create new connection to server: {}", sid);
-            closeSocket(sock);
+            closeSocket(sock); // 关闭这个链接，让大的主动去连接
 
             if (electionAddr != null) {
                 connectOne(sid, electionAddr);
@@ -627,6 +634,7 @@ public class QuorumCnxManager {
             LOG.warn("We got a connection request from a server with our own ID. "
                     + "This should be either a configuration error, or a bug.");
         } else { // Otherwise start worker threads to receive data.
+            // sid > self.getId()，对端的id比自己大
             SendWorker sw = new SendWorker(sock, sid);
             RecvWorker rw = new RecvWorker(sock, din, sid, sw);
             sw.setRecv(rw);
@@ -655,7 +663,7 @@ public class QuorumCnxManager {
         /*
          * If sending message to myself, then simply enqueue it (loopback).
          */
-        if (this.mySid == sid) {
+        if (this.mySid == sid) { // 如果是发给自己的，就直接塞到自己的队列里面
              b.position(0);
              addToRecvQueue(new Message(b.duplicate(), sid));
             /*
@@ -673,7 +681,7 @@ public class QuorumCnxManager {
              } else {
                  addToSendQueue(bq, b);
              }
-             connectOne(sid);
+             connectOne(sid); // 尝试连接一下，如果没有连上的话
 
         }
     }
@@ -727,6 +735,7 @@ public class QuorumCnxManager {
                     lastCommittedView.get(sid).electionAddr))) {
                 knownId = true;
                 LOG.debug("Server {} knows {} already, it is in the lastProposedView", self.getId(), sid);
+                // 发起连接
                 if (connectOne(sid, lastProposedView.get(sid).electionAddr))
                     return;
             }
@@ -931,7 +940,7 @@ public class QuorumCnxManager {
                     ss.bind(addr);
                     while (!shutdown) {
                         try {
-                            client = ss.accept();
+                            client = ss.accept(); // 收到了一个连接请求
                             setSockOpts(client);
                             LOG.info("Received connection request from {}", client.getRemoteSocketAddress());
                             // Receive and handle the connection request
@@ -942,6 +951,7 @@ public class QuorumCnxManager {
                             if (quorumSaslAuthEnabled) {
                                 receiveConnectionAsync(client);
                             } else {
+                                // 处理连接
                                 receiveConnection(client);
                             }
                             numRetries = 0;
@@ -1119,6 +1129,7 @@ public class QuorumCnxManager {
                  * message than that stored in lastMessage. To avoid sending
                  * stale message, we should send the message in the send queue.
                  */
+                // 第一次发送的时候，看下之前有没有发的，如果有的就发了
                 ArrayBlockingQueue<ByteBuffer> bq = queueSendMap.get(sid);
                 if (bq == null || isSendQueueEmpty(bq)) {
                    ByteBuffer b = lastMessageSent.get(sid);
@@ -1305,6 +1316,7 @@ public class QuorumCnxManager {
      */
     private ByteBuffer pollSendQueue(ArrayBlockingQueue<ByteBuffer> queue,
           long timeout, TimeUnit unit) throws InterruptedException {
+        // 对空的queue调用的时候，poll 不抛异常，remove抛异常
        return queue.poll(timeout, unit);
     }
 

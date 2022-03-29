@@ -402,7 +402,7 @@ public class Leader {
                                 s.getInputStream());
                         // 接收到了follower的连接请求
                         LearnerHandler fh = new LearnerHandler(s, is, Leader.this);
-                        // 启动一个learnHandler与之对应
+                        // 启动一个LearnerHandler与之对应
                         fh.start();
                     } catch (SocketException e) {
                         error = true;
@@ -478,6 +478,7 @@ public class Leader {
 
             // Start thread that waits for connection requests from
             // new followers.
+            // 等待其他的小弟连上来
             cnxAcceptor = new LearnerCnxAcceptor();
             cnxAcceptor.start();
 
