@@ -162,7 +162,13 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
      */
     private ChangeRecord getRecordForPath(String path) throws KeeperException.NoNodeException {
         ChangeRecord lastChange = null;
-        synchronized (zks.outstandingChanges) {
+        synchronized (zks.outstandingChanges) { // 这里有mvvc的逻辑了
+            // lastChange 表示的是最近的一次变化
+            // 先从还没有提交的changes里面获取，最新的变化
+            // 如果没有最新的变化，就从zkDatabase这两个获取，
+            // 记录下来。
+            // 这里其实有潜藏的对事务的检查逻辑
+            // 对于delete c + delete c 这种，其lastChange.stat == null，可以推断这个multi有问题，所以直接返回
             lastChange = zks.outstandingChangesForPath.get(path);
             if (lastChange == null) {
                 DataNode n = zks.getZKDatabase().getNode(path);
