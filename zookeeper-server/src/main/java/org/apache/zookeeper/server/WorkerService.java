@@ -124,6 +124,7 @@ public class WorkerService {
         if (size > 0) {
             try {
                 // make sure to map negative ids as well to [0, size-1]
+                // sessionid相同的请求会交由同一个线程进行处理，CommitProcessor的每个线程池里面只有一个线程
                 int workerNum = ((int) (id % size) + size) % size;
                 ExecutorService worker = workers.get(workerNum);
                 // Connect: 4. 线程池处理Req
@@ -199,7 +200,7 @@ public class WorkerService {
 
     public void start() {
         if (numWorkerThreads > 0) {
-            if (threadsAreAssignable) {
+            if (threadsAreAssignable) { // 线程是否分开
                 for(int i = 1; i <= numWorkerThreads; ++i) {
                     workers.add(Executors.newFixedThreadPool(
                         1, new DaemonThreadFactory(threadNamePrefix, i)));

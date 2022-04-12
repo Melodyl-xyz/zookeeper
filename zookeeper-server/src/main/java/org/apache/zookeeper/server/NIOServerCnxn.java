@@ -346,6 +346,7 @@ public class NIOServerCnxn extends ServerCnxn {
                     }
                     if (isPayload) { // not the case for 4letterword
                         // Connect: 5. 处理SelectionKey的读请求
+                        // 每次只读一个Packet，下次发现可以读，就在读一个报文
                         readPayload();
                     }
                     else {
@@ -557,7 +558,7 @@ public class NIOServerCnxn extends ServerCnxn {
     private boolean readLength(SelectionKey k) throws IOException {
         // Read the length, now get the buffer
         int len = lenBuffer.getInt();
-        if (!initialized && checkFourLetterWord(sk, len)) {
+        if (!initialized && checkFourLetterWord(sk, len)) { // 检查是否是四字命令，四字命令的connect是没有初始化的
             return false;
         }
         if (len < 0 || len > BinaryInputArchive.maxBuffer) {
@@ -566,7 +567,7 @@ public class NIOServerCnxn extends ServerCnxn {
         if (!isZKServerRunning()) {
             throw new IOException("ZooKeeperServer not running");
         }
-        incomingBuffer = ByteBuffer.allocate(len);
+        incomingBuffer = ByteBuffer.allocate(len); // incomingBuffer初始化为len的长度
         return true;
     }
 

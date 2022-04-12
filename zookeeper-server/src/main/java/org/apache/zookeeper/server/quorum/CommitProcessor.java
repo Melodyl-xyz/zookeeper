@@ -173,6 +173,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
                  * find one for which we need to wait for a commit. We cannot
                  * process a read request while we are processing write request.
                  */
+                // 处理queuedRequests：处理下一个请求，直到找到需要等待提交的请求。我们无法在处理写请求时处理读请求。
                 while (!stopped && !isWaitingForCommit() &&
                        !isProcessingCommit() &&
                        (request = queuedRequests.poll()) != null) {
