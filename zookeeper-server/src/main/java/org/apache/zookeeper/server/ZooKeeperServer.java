@@ -1041,6 +1041,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         } catch (IOException e) {
             // this is ok -- just a packet from an old client which
             // doesn't contain readOnly field
+            // 有些客户端的请求里面没有带readOnly的连接，就会有这个问题。
             LOG.warn("Connection request from old client "
                     + cnxn.getRemoteSocketAddress()
                     + "; will be dropped if server is in r-o mode");
