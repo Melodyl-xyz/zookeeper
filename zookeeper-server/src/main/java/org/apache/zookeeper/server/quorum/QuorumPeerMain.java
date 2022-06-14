@@ -130,7 +130,7 @@ public class QuorumPeerMain {
         }
     }
 
-    // 启动集群模式
+    // 读取集群配置入口：启动集群模式
     public void runFromConfig(QuorumPeerConfig config)
             throws IOException, AdminServerException
     {
