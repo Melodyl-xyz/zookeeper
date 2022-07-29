@@ -165,6 +165,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                 try {
                     // Hard close immediately, discarding buffers
                     // 当网卡收到关闭连接请求后，无论数据是否发送完毕，立即发送RST包关闭连接
+                    // 不管当前有没有还未发送给对方的数据就直接关闭链接。
                     sc.socket().setSoLinger(true, 0);
                 } catch (SocketException e) {
                     LOG.warn("Unable to set socket linger to 0, socket close"
@@ -285,7 +286,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
             boolean accepted = false;
             SocketChannel sc = null;
             try {
-                sc = acceptSocket.accept();
+                sc = acceptSocket.accept(); // 如果没有句柄了，这里就会释放掉
                 accepted = true;
                 InetAddress ia = sc.socket().getInetAddress();
                 int cnxncount = getClientCnxnCount(ia);
@@ -528,7 +529,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         IOWorkRequest(SelectorThread selectorThread, SelectionKey key) {
             this.selectorThread = selectorThread;
             this.key = key;
-                this.cnxn = (NIOServerCnxn) key.attachment();
+            this.cnxn = (NIOServerCnxn) key.attachment();
         }
 
         public void doWork() throws InterruptedException {
@@ -665,6 +666,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         // less than or equal to the timeout.
         cnxnExpiryQueue =
             new ExpiryQueue<NIOServerCnxn>(sessionlessCnxnTimeout);
+        // expirerThread ---
         expirerThread = new ConnectionExpirerThread();
 
         int numCores = Runtime.getRuntime().availableProcessors();
@@ -689,6 +691,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                  + (directBufferBytes == 0 ? "gathered writes." :
                     ("" + (directBufferBytes/1024) + " kB direct buffers.")));
         for(int i=0; i<numSelectorThreads; ++i) {
+            // selector thread ---
             selectorThreads.add(new SelectorThread(i));
         }
 
@@ -697,6 +700,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         LOG.info("binding to port " + addr);
         ss.socket().bind(addr);
         ss.configureBlocking(false);
+        // acceptThread ----
         acceptThread = new AcceptThread(ss, addr, selectorThreads);
     }
 
@@ -750,6 +754,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         stopped = false;
         if (workerPool == null) {
             // useAssignableThreads为false，代表workerPool是一个线程池组成
+            // 初始化的时候就会启动起来。
             workerPool = new WorkerService(
                 "NIOWorker", numWorkerThreads, false);
         }

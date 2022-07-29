@@ -46,8 +46,9 @@ public class ExpiryQueue<E> {
         new ConcurrentHashMap<Long, Set<E>>();
 
     private final AtomicLong nextExpirationTime = new AtomicLong();
-    private final int expirationInterval;
+    private final int expirationInterval; // 每个桶与桶之间的时间间隔
 
+    // expirationInterval 作为参数表示的是bucket桶与桶之间的间隔
     public ExpiryQueue(int expirationInterval) {
         this.expirationInterval = expirationInterval;
         nextExpirationTime.set(roundToNextInterval(Time.currentElapsedTime()));

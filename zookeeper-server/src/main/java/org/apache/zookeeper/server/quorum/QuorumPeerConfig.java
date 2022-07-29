@@ -621,7 +621,7 @@ public class QuorumPeerConfig {
      */
     public static QuorumVerifier parseDynamicConfig(Properties dynamicConfigProp, int eAlg, boolean warnings,
 	   boolean configBackwardCompatibilityMode) throws IOException, ConfigException {
-       boolean isHierarchical = false;
+       boolean isHierarchical = false; // 是否分层，就是以group的形式最值
         for (Entry<Object, Object> entry : dynamicConfigProp.entrySet()) {
             String key = entry.getKey().toString().trim();
             if (key.startsWith("group") || key.startsWith("weight")) {

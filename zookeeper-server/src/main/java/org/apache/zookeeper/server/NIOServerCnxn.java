@@ -109,6 +109,7 @@ public class NIOServerCnxn extends ServerCnxn {
         }
         sock.socket().setTcpNoDelay(true);
         /* set socket linger to false, so that socket close does not block */
+        // 表示无论如何都等未发送给对方的数据发送完毕才按照4次挥手的过程正常关闭链接。
         sock.socket().setSoLinger(false, -1);
         InetAddress addr = ((InetSocketAddress) sock.socket()
                 .getRemoteSocketAddress()).getAddress();

@@ -459,6 +459,7 @@ public class QuorumCnxManager {
             // Sending id and challenge
             // represents protocol version (in other words - message type)
             // 发送自己的协议+myid+地址
+            // !!!!这里
             dout.writeLong(PROTOCOL_VERSION);
             dout.writeLong(self.getId());
             String addr = formatInetAddr(self.getElectionAddress());
