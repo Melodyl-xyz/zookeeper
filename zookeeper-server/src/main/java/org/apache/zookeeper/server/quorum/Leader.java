@@ -391,6 +391,7 @@ public class Leader {
                     Socket s = null;
                     boolean error = false;
                     try {
+                        // 接受follower的请求
                         s = ss.accept();
 
                         // start with the initLimit, once the ack is processed
@@ -469,13 +470,16 @@ public class Leader {
         zk.registerJMX(new LeaderBean(this, zk), self.jmxLocalPeerBean);
 
         try {
+            // 选举完成
             self.tick.set(0);
+            // 加载数据
             zk.loadData();
 
             leaderStateSummary = new StateSummary(self.getCurrentEpoch(), zk.getLastProcessedZxid());
 
             // Start thread that waits for connection requests from
             // new followers.
+            // Leader开启2888监听，然后等待其余的client来连接
             cnxAcceptor = new LearnerCnxAcceptor();
             cnxAcceptor.start();
 
@@ -487,6 +491,7 @@ public class Leader {
                 lastProposed = zk.getZxid();
             }
 
+            // 发送NEWLEADER以及自己的事务id
             newLeaderProposal.packet = new QuorumPacket(NEWLEADER, zk.getZxid(),
                    null, null);
 
