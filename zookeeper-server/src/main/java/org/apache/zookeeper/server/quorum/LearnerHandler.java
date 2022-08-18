@@ -377,6 +377,7 @@ public class LearnerHandler extends ZooKeeperThread {
 
             QuorumPacket qp = new QuorumPacket();
             ia.readRecord(qp, "packet");
+            // 第一个包一定是FOLLOWERINFO
             if(qp.getType() != Leader.FOLLOWERINFO && qp.getType() != Leader.OBSERVERINFO){
                 LOG.error("First packet " + qp.toString()
                         + " is not FOLLOWERINFO or OBSERVERINFO!");
@@ -428,13 +429,16 @@ public class LearnerHandler extends ZooKeeperThread {
                 // fake the message
                 leader.waitForEpochAck(this.getSid(), ss);
             } else {
+                // 发送一个LEADERINFO
                 byte ver[] = new byte[4];
                 ByteBuffer.wrap(ver).putInt(0x10000);
                 QuorumPacket newEpochPacket = new QuorumPacket(Leader.LEADERINFO, newLeaderZxid, ver, null);
                 oa.writeRecord(newEpochPacket, "packet");
                 bufferedOutput.flush();
+                // 接收到的报文
                 QuorumPacket ackEpochPacket = new QuorumPacket();
                 ia.readRecord(ackEpochPacket, "packet");
+                // 如果接收到的报文不是ACKEPOCH，就退出
                 if (ackEpochPacket.getType() != Leader.ACKEPOCH) {
                     LOG.error(ackEpochPacket.toString()
                             + " is not ACKEPOCH");
@@ -448,6 +452,7 @@ public class LearnerHandler extends ZooKeeperThread {
            
             // Take any necessary action if we need to send TRUNC or DIFF
             // startForwarding() will be called in all cases
+            // 判断到底是diff、trunc还是snap
             boolean needSnap = syncFollower(peerLastZxid, leader.zk.getZKDatabase(), leader);
             
             /* if we are not truncating or sending a diff just send a snapshot */
@@ -477,6 +482,7 @@ public class LearnerHandler extends ZooKeeperThread {
                 }
             }
 
+            // 发送NEWLEADER信息
             LOG.debug("Sending NEWLEADER message to " + sid);
             // the version of this quorumVerifier will be set by leader.lead() in case
             // the leader is just being established. waitForEpochAck makes sure that readyToStart is true if
@@ -501,6 +507,7 @@ public class LearnerHandler extends ZooKeeperThread {
              * the leader is ready, and only then we can
              * start processing messages.
              */
+            // 等待返回ACK的报文
             qp = new QuorumPacket();
             ia.readRecord(qp, "packet");
             if(qp.getType() != Leader.ACK){
@@ -531,6 +538,7 @@ public class LearnerHandler extends ZooKeeperThread {
             // so we need to mark when the peer can actually start
             // using the data
             //
+            // 发送一个UPTODATE
             LOG.debug("Sending UPTODATE message to " + sid);      
             queuedPackets.add(new QuorumPacket(Leader.UPTODATE, -1, null, null));
 
