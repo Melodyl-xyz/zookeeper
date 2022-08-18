@@ -366,18 +366,24 @@ public class LearnerHandler extends ZooKeeperThread {
      */
     @Override
     public void run() {
+        // s.setSoTimeout(self.tickTime * self.initLimit);
+        // socket 配置了SoTimeout
         try {
             leader.addLearnerHandler(this);
             tickOfNextAckDeadline = leader.self.tick.get()
                     + leader.self.initLimit + leader.self.syncLimit;
 
+            // stream在这里配置
             ia = BinaryInputArchive.getArchive(bufferedInput);
             bufferedOutput = new BufferedOutputStream(sock.getOutputStream());
             oa = BinaryOutputArchive.getArchive(bufferedOutput);
 
             QuorumPacket qp = new QuorumPacket();
             ia.readRecord(qp, "packet");
-            // 第一个包一定是FOLLOWERINFO
+
+            // ------------------------------------------
+            // 1：第一个接收到的包一定是FOLLOWERINFO
+            // ------------------------------------------
             if(qp.getType() != Leader.FOLLOWERINFO && qp.getType() != Leader.OBSERVERINFO){
                 LOG.error("First packet " + qp.toString()
                         + " is not FOLLOWERINFO or OBSERVERINFO!");
@@ -429,13 +435,17 @@ public class LearnerHandler extends ZooKeeperThread {
                 // fake the message
                 leader.waitForEpochAck(this.getSid(), ss);
             } else {
+                // ------------------------------------------
                 // 发送一个LEADERINFO
+                // ------------------------------------------
                 byte ver[] = new byte[4];
                 ByteBuffer.wrap(ver).putInt(0x10000);
                 QuorumPacket newEpochPacket = new QuorumPacket(Leader.LEADERINFO, newLeaderZxid, ver, null);
                 oa.writeRecord(newEpochPacket, "packet");
                 bufferedOutput.flush();
-                // 接收到的报文
+                // ------------------------------------------
+                // 接受一个ACKEPOCH
+                // ------------------------------------------
                 QuorumPacket ackEpochPacket = new QuorumPacket();
                 ia.readRecord(ackEpochPacket, "packet");
                 // 如果接收到的报文不是ACKEPOCH，就退出
@@ -474,6 +484,9 @@ public class LearnerHandler extends ZooKeeperThread {
                             snapshot.getConcurrentSnapshotNumber(),
                             snapshot.isEssential() ? "exempt" : "not exempt");
                     // Dump data to peer
+                    // ------------------------------------------
+                    // 发送一个SNAPSHOT
+                    // ------------------------------------------
                     leader.zk.getZKDatabase().serializeSnapshot(oa);
                     oa.writeString("BenWasHere", "signature");
                     bufferedOutput.flush();
@@ -482,7 +495,10 @@ public class LearnerHandler extends ZooKeeperThread {
                 }
             }
 
-            // 发送NEWLEADER信息
+
+            // ------------------------------------------
+            // 发送一个NEWLEADER
+            // ------------------------------------------
             LOG.debug("Sending NEWLEADER message to " + sid);
             // the version of this quorumVerifier will be set by leader.lead() in case
             // the leader is just being established. waitForEpochAck makes sure that readyToStart is true if
@@ -507,7 +523,12 @@ public class LearnerHandler extends ZooKeeperThread {
              * the leader is ready, and only then we can
              * start processing messages.
              */
-            // 等待返回ACK的报文
+            // ------------------------------------------
+            // 接受一个ACK
+            // ------------------------------------------
+            // 如果发送SNAP太大，可能导致这里read超时，
+            // 触发IOException，
+            // leader会主动关闭这个连接
             qp = new QuorumPacket();
             ia.readRecord(qp, "packet");
             if(qp.getType() != Leader.ACK){
@@ -524,6 +545,9 @@ public class LearnerHandler extends ZooKeeperThread {
             syncLimitCheck.start();
             
             // now that the ack has been processed expect the syncLimit
+            // ------------------------------------------
+            // 后面的超时，由syncLimit托管
+            // ------------------------------------------
             sock.setSoTimeout(leader.self.tickTime * leader.self.syncLimit);
 
             /*
@@ -538,7 +562,7 @@ public class LearnerHandler extends ZooKeeperThread {
             // so we need to mark when the peer can actually start
             // using the data
             //
-            // 发送一个UPTODATE
+            // 发送一个UPTODATE，表示可以开始接客了
             LOG.debug("Sending UPTODATE message to " + sid);      
             queuedPackets.add(new QuorumPacket(Leader.UPTODATE, -1, null, null));
 
@@ -564,6 +588,7 @@ public class LearnerHandler extends ZooKeeperThread {
 
                 switch (qp.getType()) {
                 case Leader.ACK:
+                    // 接受到proposal的ACK
                     if (this.learnerType == LearnerType.OBSERVER) {
                         if (LOG.isDebugEnabled()) {
                             LOG.debug("Received ACK from Observer  " + this.sid);
@@ -597,6 +622,7 @@ public class LearnerHandler extends ZooKeeperThread {
                             //set the session owner
                             // as the follower that
                             // owns the session
+                            // 验证session是否合法
                             leader.zk.setOwner(id, this);
                         } catch (SessionExpiredException e) {
                             LOG.error("Somehow session " + Long.toHexString(id) +
@@ -621,6 +647,7 @@ public class LearnerHandler extends ZooKeeperThread {
                     bb = bb.slice();
                     Request si;
                     if(type == OpCode.sync){
+                        // 收到一个SYNC请求，发给processor来处理
                         si = new LearnerSyncRequest(this, sessionId, cxid, type, bb, qp.getAuthinfo());
                     } else {
                         si = new Request(null, sessionId, cxid, type, bb, qp.getAuthinfo());

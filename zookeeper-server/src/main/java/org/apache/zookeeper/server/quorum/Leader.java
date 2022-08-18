@@ -163,6 +163,7 @@ public class Leader {
     }
 
     // Pending sync requests. Must access under 'this' lock.
+    // 存储的是：key：上次提交的事务id；value：接收到的syncRequest
     private final HashMap<Long,List<LearnerSyncRequest>> pendingSyncs =
         new HashMap<Long,List<LearnerSyncRequest>>();
 
@@ -300,8 +301,9 @@ public class Leader {
 
     /**
      * This message type is sent by the leader to indicate that the follower is
-     * now uptodate andt can start responding to clients.
+     * now uptodate and can start responding to clients.
      */
+    // 此消息类型由领导者发送，以指示追随者现在是最新的，并且可以开始响应客户端。
     final static int UPTODATE = 12;
 
     /**
@@ -840,6 +842,8 @@ public class Leader {
         zk.commitProcessor.commit(p.request);
         if(pendingSyncs.containsKey(zxid)){
             for(LearnerSyncRequest r: pendingSyncs.remove(zxid)) {
+                // 是先发给follower commit的消息
+                // 然后在发sync
                 sendSync(r);
             }
         }
@@ -1148,6 +1152,7 @@ public class Leader {
 
     synchronized public void processSync(LearnerSyncRequest r){
         if(outstandingProposals.isEmpty()){
+            // 阻塞的proposal
             sendSync(r);
         } else {
             List<LearnerSyncRequest> l = pendingSyncs.get(lastProposed);
@@ -1162,6 +1167,12 @@ public class Leader {
     /**
      * Sends a sync message to the appropriate server
      */
+    // 有两个地方调用
+    // 一个是在ProposalRequestProcessor处理的时候：
+    // 如果Leader收到了sync请求，但是发现也没有pending的，就直接返回。
+    // 一个是在Leader准备提交这个zxid的时候：
+    // 查下pending里面有没有，如果有的话，就发个sync过去。
+    // follower收到这个之后，就会提交
     public void sendSync(LearnerSyncRequest r){
         QuorumPacket qp = new QuorumPacket(Leader.SYNC, 0, null, null);
         r.fh.queuePacket(qp);
