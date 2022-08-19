@@ -81,11 +81,13 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements
      * 5 bytes are from timestamp, and low order 2 bytes are 0s.
      */
     public static long initializeNextSession(long id) {
+        // session生成的方法
         long nextSid;
         nextSid = (Time.currentElapsedTime() << 24) >>> 8;
         nextSid =  nextSid | (id <<56);
         if (nextSid == EphemeralType.CONTAINER_EPHEMERAL_OWNER) {
             ++nextSid;  // this is an unlikely edge case, but check it just in case
+            // 这是一个不太可能的边缘情况，但检查一下以防万一
         }
         return nextSid;
     }

@@ -839,6 +839,7 @@ public class Leader {
             commit(zxid);
             inform(p);
         }
+        // 交由commitProcessor提交
         zk.commitProcessor.commit(p.request);
         if(pendingSyncs.containsKey(zxid)){
             for(LearnerSyncRequest r: pendingSyncs.remove(zxid)) {

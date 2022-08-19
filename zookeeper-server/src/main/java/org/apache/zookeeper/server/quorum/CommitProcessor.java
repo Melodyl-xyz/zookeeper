@@ -37,6 +37,9 @@ import org.apache.zookeeper.server.ZooKeeperServerListener;
  * locally submitted requests. The trick is that locally submitted requests that
  * change the state of the system will come back as incoming committed requests,
  * so we need to match them up.
+ * CommitProcessor这种RequestProcessor，它会将传入的committed请求和本地submitted请求进行匹配。
+ * 诀窍在于：更改系统状态的 本地submitted请求 会以传入的committed请求 重新被CommitProcessor处理。
+ * 所以我们需要对他们进行匹配。
  *
  * The CommitProcessor is multi-threaded. Communication between threads is
  * handled via queues, atomics, and wait/notifyAll synchronized on the
@@ -52,9 +55,18 @@ import org.apache.zookeeper.server.ZooKeeperServerListener;
  *   - 0-N worker threads, which run the rest of the request processor pipeline
  *         on the requests. If configured with 0 worker threads, the primary
  *         commit processor thread runs the pipeline directly.
+ * CommitProcessor是多线程的。
+ * 线程之间的通信通过queue、atomic和wait/notifyAll来处理。
+ * CommitProcessor就相当于一个网关，这个网关允许请求能够在剩余的处理链上继续被处理。
+ * 它可以同时处理多个读请求，或是一个写请求，从而保证按事务ID顺序（zxid）处理写请求。
+ * - 1 个 commit processor 主线程，它监视请求队列，然后根据其sessionId来分配请求到不同的worker thread。
+ * 以便同一个session的读写请求会被分配到同一个线程中（从而保证了顺序性）。
+ * - 0-N 个 工作线程，它负责将请求在剩余的request processor pipeline中继续"流动"。
+ * 如果设置为0个工作线程，则由commit processor主线程直接运行这个pipeline。
  *
  * Typical (default) thread counts are: on a 32 core machine, 1 commit
  * processor thread and 32 worker threads.
+ * 典型数值是：32核机器上，1个processor线程和32个worker线程。
  *
  * Multi-threading constraints:
  *   - Each session's requests must be processed in order.
@@ -64,6 +76,13 @@ import org.apache.zookeeper.server.ZooKeeperServerListener;
  *
  * The current implementation solves the third constraint by simply allowing no
  * read requests to be processed in parallel with write requests.
+ *
+ * 多线程约束：
+ * - 每个session所对应的不同请求，都必须按序处理。
+ * - 写请求必须按照事务id（zxid）顺序处理
+ * - 必须保证当一个session写入的时候没有竞争发生，从而能够触发另一个会话中对于读取请求设置的监听。
+ *
+ * 对于第三约束，当前的实现采用了一种简单的方式，即不允许读请求与写请求并行处理来解决。
  */
 public class CommitProcessor extends ZooKeeperCriticalThread implements
         RequestProcessor {
@@ -174,14 +193,20 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
                  * process a read request while we are processing write request.
                  */
                 // 处理queuedRequests：处理下一个请求，直到找到需要等待提交的请求。我们无法在处理写请求时处理读请求。
+                // isWaitingForCommit：是判断nextPending有没有值
+                // isProcessingCommit：是判断currentlyCommitting有没有值
                 while (!stopped && !isWaitingForCommit() &&
                        !isProcessingCommit() &&
                        (request = queuedRequests.poll()) != null) {
                     if (needCommit(request)) {
-                        // 事务请求放入nextPending
+                        // 事务请求放入nextPending中，
+                        // 这样isWaitingForCommit返回为true，while就不会再进来
+                        // 这也就意味着，如果queue里面有一个在正在commit的、或者正在等待commit的存在，就不会进入while中
                         nextPending.set(request);
                     } else {
-                        sendToNextProcessor(request);// 这里面会执行 numRequestsProcessing++
+                        sendToNextProcessor(request);
+                        // 这里面会执行 numRequestsProcessing++
+                        // 对于读请求，会交由线程池来处理
                     }
                 }
 
@@ -190,6 +215,9 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
                  * came in for the pending request. We can only commit a
                  * request when there is no other request being processed.
                  */
+                // 处理committedRequests：
+                // 检查并查看是否有等待的commit。
+                // 我们只能在没有其他请求正在处理时提交请求。
                 processCommitted();
             }
         } catch (Throwable e) {
@@ -209,7 +237,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
         // 因为，committedRequest里面的内容为空
         if (!stopped && !isProcessingRequest() &&
                 (committedRequests.peek() != null)) {
-            // numRequestsProcessing == 0
+            // numRequestsProcessing == 0：没有请求在处理
             // committedRequests.peek() != null
 
             /*
@@ -217,11 +245,15 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
              * waiting in queuedRequests or it is waiting for a
              * commit. 
              */
+            // 只有在queuedRequests中没有新请求等待或正在等待提交时，才继续。
             if ( !isWaitingForCommit() && !queuedRequests.isEmpty()) {
-                // nextPending == null
-                // !queuedRequests.isEmpty()
+                // nextPending 为空
+                // 且
+                // queuedRequests 不为空
+                // 就返回
                 return;
             }
+            // committedRequests中存储已经达到共识的请求
             request = committedRequests.poll();
 
             /*
@@ -266,6 +298,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
                  + (numWorkerThreads > 0 ? numWorkerThreads : "no")
                  + " worker threads.");
         if (workerPool == null) {
+            // 在commitProcessor，每个线程一个线程池
             workerPool = new WorkerService(
                 "CommitProcWork", numWorkerThreads, true);
         }

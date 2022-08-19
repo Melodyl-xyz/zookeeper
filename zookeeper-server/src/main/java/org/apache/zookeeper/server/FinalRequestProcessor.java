@@ -107,7 +107,7 @@ public class FinalRequestProcessor implements RequestProcessor {
             ZooTrace.logRequest(LOG, traceMask, 'E', request, "");
         }
         ProcessTxnResult rc = null;
-        synchronized (zks.outstandingChanges) {
+        synchronized (zks.outstandingChanges) { // 由于会多线程调用，所以这里需要加锁
             // Need to process local session requests
             // 这里zkDatabase的Datatree会变
             rc = zks.processTxn(request);
