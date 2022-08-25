@@ -139,7 +139,8 @@ public class Follower extends Learner{
                QuorumVerifier qv = self.configFromString(new String(setDataTxn.getData()));
                self.setLastSeenQuorumVerifier(qv, true);                               
             }
-            
+
+            // 这里会发送ACK
             fzk.logRequest(hdr, txn);
             break;
         case Leader.COMMIT:

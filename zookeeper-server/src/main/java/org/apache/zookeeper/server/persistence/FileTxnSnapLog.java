@@ -218,6 +218,7 @@ public class FileTxnSnapLog {
      * this function restores the server
      * database after reading from the
      * snapshots and transaction logs
+     * 此函数在从快照和事务日志读取后恢复服务器数据库
      * @param dt the datatree to be restored
      * @param sessions the sessions to be restored
      * @param listener the playback listener to run on the
