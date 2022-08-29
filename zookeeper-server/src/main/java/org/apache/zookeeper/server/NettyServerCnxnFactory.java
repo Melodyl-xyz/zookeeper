@@ -587,6 +587,7 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
     
     @Override
     public void start() {
+        // 启动
         LOG.info("binding to port {}", localAddress);
         parentChannel = bootstrap.bind(localAddress).syncUninterruptibly().channel();
         // Port changes after bind() if the original port was 0, update

@@ -242,6 +242,8 @@ public class FileTxnSnapLog {
             if (txnLog.getLastLoggedZxid() != -1) {
                 // ZOOKEEPER-3056: provides an escape hatch for users upgrading
                 // from old versions of zookeeper (3.4.x, pre 3.5.3).
+                // 3.5.3以上的版本snapshot是一定会有一个的，所以如果没有要么是出问题了，要么是版本的问题。
+                // 这里为了兼容升级的情况，所以添加了zookeeper.snapshot.trust.empty这个选项
                 if (!trustEmptySnapshot) {
                     throw new IOException(EMPTY_SNAPSHOT_WARNING + "Something is broken!");
                 } else {
@@ -251,6 +253,7 @@ public class FileTxnSnapLog {
             }
             /* TODO: (br33d) we should either put a ConcurrentHashMap on restore()
              *       or use Map on save() */
+            // save的目的是为了解决3.4的bug：https://issues.apache.org/jira/browse/ZOOKEEPER-2325
             save(dt, (ConcurrentHashMap<Long, Integer>)sessions);
             /* return a zxid of zero, since we the database is empty */
             return 0;
