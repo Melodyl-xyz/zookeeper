@@ -1053,6 +1053,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             throw new CloseRequestException(msg);
         }
         if (connReq.getLastZxidSeen() > zkDb.dataTree.lastProcessedZxid) {
+            // connect 会发送最近一次的事务id，如果超过了当前的id，则退出，换个zkserver连接。
             String msg = "Refusing session request for client "
                 + cnxn.getRemoteSocketAddress()
                 + " as it has seen zxid 0x"
