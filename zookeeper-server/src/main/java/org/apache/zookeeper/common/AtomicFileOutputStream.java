@@ -43,6 +43,12 @@ import org.slf4j.LoggerFactory;
  * file - instead the target file is deleted before this one is moved into
  * place.
  */
+/*
+AtomicFileOutputStream属于FileOutputStream的一种，它只有在完全写入并刷新到磁盘后才会显示在其目标位置。
+在写文件的时候，它将使用.tmp后缀。
+当 outputstream 关闭时，它将调用刷新、fsynced，然后通过mv移动到指定位置，覆盖该位置上已经存在的任何文件。
+注意：在Windows平台上，它不会自动替换目标文件，而是在将目标文件移动到位之前删除目标文件。
+ */
 public class AtomicFileOutputStream extends FilterOutputStream {
     private static final String TMP_EXTENSION = ".tmp";
 
@@ -78,6 +84,7 @@ public class AtomicFileOutputStream extends FilterOutputStream {
     public void close() throws IOException {
         boolean triedToClose = false, success = false;
         try {
+            // 调用flush和sync
             flush();
             ((FileOutputStream) out).getFD().sync();
 
