@@ -98,6 +98,7 @@ public class DataNode implements Record {
             // let's be conservative on the typical number of children
             children = new HashSet<String>(8);
         }
+        // 只会加入一个单独的childName，而不是一个完整的path
         return children.add(child);
     }
 

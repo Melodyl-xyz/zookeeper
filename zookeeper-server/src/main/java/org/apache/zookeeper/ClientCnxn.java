@@ -844,6 +844,7 @@ public class ClientCnxn {
             }
             if (replyHdr.getXid() == -1) {
                 // -1 means notification
+                // 接收到了通知
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("Got notification sessionid:0x"
                         + Long.toHexString(sessionId));
@@ -1528,6 +1529,7 @@ public class ClientCnxn {
         synchronized (packet) {
             if (requestTimeout > 0) {
                 // Wait for request completion with timeout
+                // 等待请求内容返回
                 waitForPacketFinish(r, packet);
             } else {
                 // Wait for request completion infinitely
