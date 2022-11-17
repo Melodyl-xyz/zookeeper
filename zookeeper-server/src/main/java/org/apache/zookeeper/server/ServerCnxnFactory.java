@@ -236,6 +236,7 @@ public abstract class ServerCnxnFactory {
         }
 
         // jaas.conf entry available
+        // sasl入口
         try {
             saslServerCallbackHandler = new SaslServerCallbackHandler(Configuration.getConfiguration());
             login = new Login(serverSection, saslServerCallbackHandler, new ZKConfig() );
