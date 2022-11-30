@@ -1194,6 +1194,8 @@ public class ClientCnxn {
                             + " for sessionid 0x"
                             + Long.toHexString(sessionId);
                         LOG.warn(warnInfo);
+                        // 这里会暴露出 SessionTimeoutException
+                        // 这个时候还是会继续收到一个CLOSED的event
                         throw new SessionTimeoutException(warnInfo);
                     }
                     if (state.isConnected()) {
@@ -1226,6 +1228,8 @@ public class ClientCnxn {
                         to = Math.min(to, pingRwTimeout - idlePingRwServer);
                     }
 
+                    // 这里会暴露 SessionExpiredException，然后添加发送一个expired的event
+                    // SessionExpiredException会将连接状态转为CLOSED，这个时候不会受到disconnected的event
                     clientCnxnSocket.doTransport(to, pendingQueue, ClientCnxn.this);
                 } catch (Throwable e) {
                     if (closing) {
@@ -1239,14 +1243,22 @@ public class ClientCnxn {
                     } else {
                         // this is ugly, you have a better way speak up
                         if (e instanceof SessionExpiredException) {
+                            // 这里是客户端处理IO请求的时候，读到server发过来的sessionId失效的报文
+                            // 连接状态置为CLOSED，因此不会收到一个DISCONNECTED的event，但会收到一个Expired的event
                             LOG.info(e.getMessage() + ", closing socket connection");
                         } else if (e instanceof SessionTimeoutException) {
+                            // 客户端的readTimeout/connectTimeout的时间到了，还没有收到server的响应报文
+                            // 不会将连接状态置为CLOSED，因此会收到一个DISCONNECTED的event
                             LOG.info(e.getMessage() + RETRY_CONN_MSG);
                         } else if (e instanceof EndOfStreamException) {
+                            // TCP连接异常，读取不到报文的时候，抛出EndOfStreamException
+                            // 不会将连接状态置为CLOSED，因此会收到一个DISCONNECTED的event
                             LOG.info(e.getMessage() + RETRY_CONN_MSG);
                         } else if (e instanceof RWServerFoundException) {
                             LOG.info(e.getMessage());
                         } else if (e instanceof SocketException) {
+                            // 这里是TCP连接异常，读取不到报文的时候，抛出EndOfStreamException
+                            // 这里不会将连接状态置为CLOSED，因此会收到一个DISCONNECTED的event
                             LOG.info("Socket error occurred: {}: {}", serverAddress, e.getMessage());
                         } else {
                             LOG.warn("Session 0x{} for server {}, unexpected error{}",
@@ -1268,9 +1280,13 @@ public class ClientCnxn {
             }
             clientCnxnSocket.close();
             if (state.isAlive()) {
+                // 在此处的逻辑里面：如果没有明确的收到server返回的sessionId invalid的响应，那么都归为TCP的异常，那么就会收到一个DISCONNECTED的event
+                // 当然，DISCONNECTED并不是都归为TCP异常，如果server在处理过程中，发现session已经超时，会触发一个SessionExpiredException，
+                // 这个 Excepiton 被zkClient接收到，也会返回一个DISCONNECTED的event。
                 eventThread.queueEvent(new WatchedEvent(Event.EventType.None,
                         Event.KeeperState.Disconnected, null));
             }
+            // 不管怎么样，都会收到一个CLOSED的报文，表示连接失效
             eventThread.queueEvent(new WatchedEvent(Event.EventType.None,
                         Event.KeeperState.Closed, null));
             ZooTrace.logTraceMessage(LOG, ZooTrace.getTextTraceLevel(),

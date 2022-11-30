@@ -720,6 +720,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     protected void revalidateSession(ServerCnxn cnxn, long sessionId,
             int sessionTimeout) throws IOException {
+        // 这里如果session超时了，就直接finish
         boolean rc = sessionTracker.touchSession(sessionId, sessionTimeout);
         if (LOG.isTraceEnabled()) {
             ZooTrace.logTraceMessage(LOG, ZooTrace.SESSION_TRACE_MASK,
