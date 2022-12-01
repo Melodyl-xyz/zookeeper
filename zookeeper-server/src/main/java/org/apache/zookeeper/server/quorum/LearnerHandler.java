@@ -609,6 +609,8 @@ public class LearnerHandler extends ZooKeeperThread {
                     }
                     break;
                 case Leader.REVALIDATE:
+                    // leader在这里检验session的合法性
+                    // 并返回给对应的节点
                     bis = new ByteArrayInputStream(qp.getData());
                     dis = new DataInputStream(bis);
                     long id = dis.readLong();

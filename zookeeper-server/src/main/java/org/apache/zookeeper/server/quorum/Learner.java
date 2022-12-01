@@ -111,6 +111,9 @@ public class Learner {
     void validateSession(ServerCnxn cnxn, long clientId, int timeout)
             throws IOException {
         LOG.info("Revalidating client: 0x" + Long.toHexString(clientId));
+        // 这种是session不是Local的，需要向Global上确认
+        // 发送REVALIDATE给Leader
+        // Leader会发送结果（在LearnerHandler中）
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(baos);
         dos.writeLong(clientId);
