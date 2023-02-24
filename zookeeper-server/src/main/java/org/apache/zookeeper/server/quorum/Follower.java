@@ -89,6 +89,7 @@ public class Follower extends Learner{
                     throw new IOException("Error: Epoch of leader is lower");
                 }
                 // 同步Leader的数据
+                // 这里会把超时时间调整为syncLimit * tickTime
                 syncWithLeader(newEpochZxid);                
                 QuorumPacket qp = new QuorumPacket();
                 while (this.isRunning()) {
