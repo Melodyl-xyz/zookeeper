@@ -475,6 +475,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements
 
                 String newMembers = reconfigRequest.getNewMembers();
 
+                // newMembers 增量和非增量的区别在于是否使用newMember字段
                 if (newMembers != null) { //non-incremental membership change
                    LOG.info("Non-incremental reconfig");
 

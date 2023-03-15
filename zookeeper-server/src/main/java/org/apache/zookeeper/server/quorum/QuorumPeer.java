@@ -1606,6 +1606,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
             return;
         }
 
+        // follower将reconfig 配置写入自己中
         // If qcm is non-null, we may call qcm.connectOne(), which will take the lock on qcm
         // and then take QV_LOCK.  Take the locks in the same order to ensure that we don't
         // deadlock against other callers of connectOne().  If qcmRef gets set in another
