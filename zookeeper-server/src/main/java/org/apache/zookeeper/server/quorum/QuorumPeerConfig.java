@@ -202,6 +202,7 @@ public class QuorumPeerConfig {
                            break;
                        }
                    }
+                   // config会读取到.next的文件，然后任务这是需要提交的，然后会设置为lastseen里面
                    lastSeenQuorumVerifier = createQuorumVerifier(dynamicConfigNextCfg, isHierarchical);
                } catch (IOException e) {
                    LOG.warn("NextQuorumVerifier is initiated to null");
