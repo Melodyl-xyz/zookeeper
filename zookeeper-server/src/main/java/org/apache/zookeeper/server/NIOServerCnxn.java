@@ -545,6 +545,7 @@ public class NIOServerCnxn extends ServerCnxn {
             return true;
         } else {
             CommandExecutor commandExecutor = new CommandExecutor();
+            // new CommandExecutor().execute -> new XxxCommand().start(); -> new XxxCommand().commandRun()
             return commandExecutor.execute(this, pwriter, len, zkServer, factory);
         }
     }
