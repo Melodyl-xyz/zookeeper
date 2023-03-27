@@ -643,6 +643,7 @@ public class Leader {
 
                     syncedAckSet.addAck(self.getId());
 
+                    // 检查learner上次是否存活，如果是则参与到投票
                     for (LearnerHandler f : getLearners()) {
                         if (f.synced()) {
                             syncedAckSet.addAck(f.getSid());
