@@ -756,6 +756,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         }
 
         try {
+            // 如果session不有效，sessionTimeout传入0
             ConnectResponse rsp = new ConnectResponse(0, valid ? cnxn.getSessionTimeout()
                     : 0, valid ? cnxn.getSessionId() : 0, // send 0 if session is no
                             // longer valid

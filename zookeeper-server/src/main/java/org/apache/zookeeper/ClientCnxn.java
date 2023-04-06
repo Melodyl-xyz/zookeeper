@@ -1389,6 +1389,7 @@ public class ClientCnxn {
                 byte[] _sessionPasswd, boolean isRO) throws IOException {
             negotiatedSessionTimeout = _negotiatedSessionTimeout;
             if (negotiatedSessionTimeout <= 0) {
+                // sessionTimeout = 0， 表示超时
                 state = States.CLOSED;
 
                 eventThread.queueEvent(new WatchedEvent(
