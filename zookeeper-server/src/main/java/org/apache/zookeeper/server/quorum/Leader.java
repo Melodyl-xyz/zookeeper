@@ -843,6 +843,7 @@ public class Leader {
         // 交由commitProcessor提交
         zk.commitProcessor.commit(p.request);
         if(pendingSyncs.containsKey(zxid)){
+            // 如果这个事务ID是pengdingSync等待的事务id
             for(LearnerSyncRequest r: pendingSyncs.remove(zxid)) {
                 // 是先发给follower commit的消息
                 // 然后在发sync
