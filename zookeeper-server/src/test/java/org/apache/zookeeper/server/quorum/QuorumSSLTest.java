@@ -32,9 +32,12 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.math.BigInteger;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
+import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
@@ -59,6 +62,7 @@ import javax.net.ssl.SSLServerSocketFactory;
 import org.apache.zookeeper.PortAssignment;
 import org.apache.zookeeper.client.ZKClientConfig;
 import org.apache.zookeeper.common.QuorumX509Util;
+import org.apache.zookeeper.common.SecretUtilsTest;
 import org.apache.zookeeper.server.ServerCnxnFactory;
 import org.apache.zookeeper.test.ClientBase;
 import org.bouncycastle.asn1.ocsp.OCSPResponse;
@@ -114,10 +118,23 @@ import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.bouncycastle.util.io.pem.PemWriter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class QuorumSSLTest extends QuorumPeerTestBase {
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @ParameterizedTest(name = "fipsEnabled = {0}")
+    @ValueSource(booleans = { false, true})
+    private @interface TestBothFipsModes {
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @ParameterizedTest(name = "fipsEnabled = {0}")
+    @ValueSource(booleans = { false })
+    private @interface TestNoFipsOnly {
+    }
 
     private static final String SSL_QUORUM_ENABLED = "sslQuorum=true\n";
     private static final String PORT_UNIFICATION_ENABLED = "portUnification=true\n";
@@ -465,8 +482,10 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
     private void clearSSLSystemProperties() {
         System.clearProperty(quorumX509Util.getSslKeystoreLocationProperty());
         System.clearProperty(quorumX509Util.getSslKeystorePasswdProperty());
+        System.clearProperty(quorumX509Util.getSslKeystorePasswdPathProperty());
         System.clearProperty(quorumX509Util.getSslTruststoreLocationProperty());
         System.clearProperty(quorumX509Util.getSslTruststorePasswdProperty());
+        System.clearProperty(quorumX509Util.getSslTruststorePasswdPathProperty());
         System.clearProperty(quorumX509Util.getSslHostnameVerificationEnabledProperty());
         System.clearProperty(quorumX509Util.getSslOcspEnabledProperty());
         System.clearProperty(quorumX509Util.getSslCrlEnabledProperty());
@@ -474,9 +493,11 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
         System.clearProperty(quorumX509Util.getSslProtocolProperty());
     }
 
-    @Test
+    @TestBothFipsModes
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testQuorumSSL() throws Exception {
+    public void testQuorumSSL(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
+
         q1 = new MainThread(1, clientPortQp1, quorumConfiguration, SSL_QUORUM_ENABLED);
         q2 = new MainThread(2, clientPortQp2, quorumConfiguration, SSL_QUORUM_ENABLED);
 
@@ -495,10 +516,37 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
         assertFalse(ClientBase.waitForServerUp("127.0.0.1:" + clientPortQp3, CONNECTION_TIMEOUT));
     }
 
-
-    @Test
+    @TestBothFipsModes
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testQuorumSSLWithMultipleAddresses() throws Exception {
+    public void testQuorumSSL_withPasswordFromFile(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
+
+        final Path secretFile = SecretUtilsTest.createSecretFile(String.valueOf(PASSWORD));
+
+        System.clearProperty(quorumX509Util.getSslKeystorePasswdProperty());
+        System.setProperty(quorumX509Util.getSslKeystorePasswdPathProperty(), secretFile.toString());
+
+        System.clearProperty(quorumX509Util.getSslTruststorePasswdProperty());
+        System.setProperty(quorumX509Util.getSslTruststorePasswdPathProperty(), secretFile.toString());
+
+        q1 = new MainThread(1, clientPortQp1, quorumConfiguration, SSL_QUORUM_ENABLED);
+        q2 = new MainThread(2, clientPortQp2, quorumConfiguration, SSL_QUORUM_ENABLED);
+        q3 = new MainThread(3, clientPortQp3, quorumConfiguration, SSL_QUORUM_ENABLED);
+
+        q1.start();
+        q2.start();
+        q3.start();
+
+        assertTrue(ClientBase.waitForServerUp("127.0.0.1:" + clientPortQp1, CONNECTION_TIMEOUT));
+        assertTrue(ClientBase.waitForServerUp("127.0.0.1:" + clientPortQp2, CONNECTION_TIMEOUT));
+        assertTrue(ClientBase.waitForServerUp("127.0.0.1:" + clientPortQp3, CONNECTION_TIMEOUT));
+    }
+
+    @TestBothFipsModes
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    public void testQuorumSSLWithMultipleAddresses(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
+
         System.setProperty(QuorumPeer.CONFIG_KEY_MULTI_ADDRESS_ENABLED, "true");
         quorumConfiguration = generateMultiAddressQuorumConfiguration();
 
@@ -521,9 +569,11 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
     }
 
 
-    @Test
+    @TestBothFipsModes
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testRollingUpgrade() throws Exception {
+    public void testRollingUpgrade(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
+
         // Form a quorum without ssl
         q1 = new MainThread(1, clientPortQp1, quorumConfiguration);
         q2 = new MainThread(2, clientPortQp2, quorumConfiguration);
@@ -569,9 +619,10 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
         }
     }
 
-    @Test
+    @TestNoFipsOnly
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testHostnameVerificationWithInvalidHostname() throws Exception {
+    public void testHostnameVerificationWithInvalidHostname(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
         String badhostnameKeystorePath = tmpDir + "/badhost.jks";
         X509Certificate badHostCert = buildEndEntityCert(
             defaultKeyPair,
@@ -586,9 +637,10 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
         testHostnameVerification(badhostnameKeystorePath, false);
     }
 
-    @Test
+    @TestNoFipsOnly
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testHostnameVerificationWithInvalidIPAddress() throws Exception {
+    public void testHostnameVerificationWithInvalidIPAddress(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
         String badhostnameKeystorePath = tmpDir + "/badhost.jks";
         X509Certificate badHostCert = buildEndEntityCert(
             defaultKeyPair,
@@ -603,9 +655,11 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
         testHostnameVerification(badhostnameKeystorePath, false);
     }
 
-    @Test
+    @TestNoFipsOnly
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testHostnameVerificationWithInvalidIpAddressAndInvalidHostname() throws Exception {
+    public void testHostnameVerificationWithInvalidIpAddressAndInvalidHostname(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
+
         String badhostnameKeystorePath = tmpDir + "/badhost.jks";
         X509Certificate badHostCert = buildEndEntityCert(
             defaultKeyPair,
@@ -620,9 +674,11 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
         testHostnameVerification(badhostnameKeystorePath, false);
     }
 
-    @Test
+    @TestNoFipsOnly
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testHostnameVerificationForInvalidMultiAddressServerConfig() throws Exception {
+    public void testHostnameVerificationForInvalidMultiAddressServerConfig(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
+
         System.setProperty(QuorumPeer.CONFIG_KEY_MULTI_ADDRESS_ENABLED, "true");
         quorumConfiguration = generateMultiAddressQuorumConfiguration();
 
@@ -640,9 +696,11 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
         testHostnameVerification(badhostnameKeystorePath, false);
     }
 
-    @Test
+    @TestNoFipsOnly
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testHostnameVerificationWithInvalidIpAddressAndValidHostname() throws Exception {
+    public void testHostnameVerificationWithInvalidIpAddressAndValidHostname(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
+
         String badhostnameKeystorePath = tmpDir + "/badhost.jks";
         X509Certificate badHostCert = buildEndEntityCert(
             defaultKeyPair,
@@ -657,9 +715,11 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
         testHostnameVerification(badhostnameKeystorePath, true);
     }
 
-    @Test
+    @TestNoFipsOnly
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testHostnameVerificationWithValidIpAddressAndInvalidHostname() throws Exception {
+    public void testHostnameVerificationWithValidIpAddressAndInvalidHostname(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
+
         String badhostnameKeystorePath = tmpDir + "/badhost.jks";
         X509Certificate badHostCert = buildEndEntityCert(
             defaultKeyPair,
@@ -724,9 +784,11 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
             ClientBase.waitForServerUp("127.0.0.1:" + clientPortQp3, CONNECTION_TIMEOUT));
     }
 
-    @Test
+    @TestBothFipsModes
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testCertificateRevocationList() throws Exception {
+    public void testCertificateRevocationList(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
+
         q1 = new MainThread(1, clientPortQp1, quorumConfiguration, SSL_QUORUM_ENABLED);
         q2 = new MainThread(2, clientPortQp2, quorumConfiguration, SSL_QUORUM_ENABLED);
 
@@ -790,9 +852,11 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
         assertFalse(ClientBase.waitForServerUp("127.0.0.1:" + clientPortQp3, CONNECTION_TIMEOUT));
     }
 
-    @Test
+    @TestBothFipsModes
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testOCSP() throws Exception {
+    public void testOCSP(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
+
         Integer ocspPort = PortAssignment.unique();
 
         q1 = new MainThread(1, clientPortQp1, quorumConfiguration, SSL_QUORUM_ENABLED);
@@ -864,9 +928,11 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
         }
     }
 
-    @Test
+    @TestBothFipsModes
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testCipherSuites() throws Exception {
+    public void testCipherSuites(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
+
         // Get default cipher suites from JDK
         SSLServerSocketFactory ssf = (SSLServerSocketFactory) SSLServerSocketFactory.getDefault();
         List<String> defaultCiphers = new ArrayList<String>();
@@ -905,9 +971,10 @@ public class QuorumSSLTest extends QuorumPeerTestBase {
         assertFalse(ClientBase.waitForServerUp("127.0.0.1:" + clientPortQp3, CONNECTION_TIMEOUT));
     }
 
-    @Test
+    @TestBothFipsModes
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
-    public void testProtocolVersion() throws Exception {
+    public void testProtocolVersion(boolean fipsEnabled) throws Exception {
+        System.setProperty(quorumX509Util.getFipsModeProperty(), Boolean.toString(fipsEnabled));
         System.setProperty(quorumX509Util.getSslProtocolProperty(), "TLSv1.2");
 
         q1 = new MainThread(1, clientPortQp1, quorumConfiguration, SSL_QUORUM_ENABLED);

@@ -870,6 +870,18 @@ public class ClientCnxn {
         private boolean isFirstConnect = true;
         private volatile ZooKeeperSaslClient zooKeeperSaslClient;
 
+        private String stripChroot(String serverPath) {
+            if (serverPath.startsWith(chrootPath)) {
+                if (serverPath.length() == chrootPath.length()) {
+                    return "/";
+                }
+                return serverPath.substring(chrootPath.length());
+            } else if (serverPath.startsWith(ZooDefs.ZOOKEEPER_NODE_SUBTREE)) {
+                return serverPath;
+            }
+            LOG.warn("Got server path {} which is not descendant of chroot path {}.", serverPath, chrootPath);
+            return serverPath;
+        }
 
         void readResponse(ByteBuffer incomingBuffer) throws IOException {
             ByteBufferInputStream bbis = new ByteBufferInputStream(incomingBuffer);
@@ -901,14 +913,8 @@ public class ClientCnxn {
                 // convert from a server path to a client path
                 if (chrootPath != null) {
                     String serverPath = event.getPath();
-                    if (serverPath.compareTo(chrootPath) == 0) {
-                        event.setPath("/");
-                    } else if (serverPath.length() > chrootPath.length()) {
-                        event.setPath(serverPath.substring(chrootPath.length()));
-                     } else {
-                         LOG.warn("Got server path {} which is too short for chroot path {}.",
-                             event.getPath(), chrootPath);
-                     }
+                    String clientPath = stripChroot(serverPath);
+                    event.setPath(clientPath);
                 }
 
                 WatchedEvent we = new WatchedEvent(event);
@@ -1175,6 +1181,7 @@ public class ClientCnxn {
         }
 
         @Override
+        @SuppressFBWarnings("JLM_JSR166_UTILCONCURRENT_MONITORENTER")
         public void run() {
             clientCnxnSocket.introduce(this, sessionId, outgoingQueue);
             clientCnxnSocket.updateNow();
@@ -1283,10 +1290,11 @@ public class ClientCnxn {
                 } catch (Throwable e) {
                     if (closing) {
                         // closing so this is expected
-                        LOG.warn(
-                            "An exception was thrown while closing send thread for session 0x{}.",
-                            Long.toHexString(getSessionId()),
-                            e);
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug(
+                                "An exception was thrown while closing send thread for session 0x{}.",
+                                Long.toHexString(getSessionId()), e);
+                        }
                         break;
                     } else {
                         LOG.warn(
@@ -1303,7 +1311,7 @@ public class ClientCnxn {
                 }
             }
 
-            synchronized (state) {
+            synchronized (outgoingQueue) {
                 // When it comes to this point, it guarantees that later queued
                 // packet to outgoingQueue will be notified of death.
                 cleanup();
@@ -1645,6 +1653,7 @@ public class ClientCnxn {
         return queuePacket(h, r, request, response, cb, clientPath, serverPath, ctx, watchRegistration, null);
     }
 
+    @SuppressFBWarnings("JLM_JSR166_UTILCONCURRENT_MONITORENTER")
     public Packet queuePacket(
         RequestHeader h,
         ReplyHeader r,
@@ -1671,7 +1680,7 @@ public class ClientCnxn {
         // 1. synchronize with the final cleanup() in SendThread.run() to avoid race
         // 2. synchronized against each packet. So if a closeSession packet is added,
         // later packet will be notified.
-        synchronized (state) {
+        synchronized (outgoingQueue) {
             if (!state.isAlive() || closing) {
                 conLossPacket(packet);
             } else {

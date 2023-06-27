@@ -31,7 +31,7 @@
   <artifactId>parent</artifactId>
   <packaging>pom</packaging>
   <!-- to change version: mvn -B release:update-versions -DdevelopmentVersion=3.6.0-SNAPSHOT -->
-  <version>3.8.0-SNAPSHOT</version>
+  <version>3.8.2-SNAPSHOT</version>
   <name>Apache ZooKeeper</name>
   <description>
     ZooKeeper is a centralized service for maintaining configuration information, naming,
@@ -71,7 +71,7 @@
     <connection>scm:git:https://gitbox.apache.org/repos/asf/zookeeper.git</connection>
     <developerConnection>scm:git:https://gitbox.apache.org/repos/asf/zookeeper.git</developerConnection>
     <url>https://gitbox.apache.org/repos/asf/zookeeper.git</url>
-    <tag>HEAD</tag>
+    <tag>branch-3.8</tag>
   </scm>
   <issueManagement>
     <system>JIRA</system>
@@ -459,19 +459,19 @@
 
     <!-- dependency versions -->
     <slf4j.version>1.7.30</slf4j.version>
+    <logback-version>1.2.10</logback-version>
     <audience-annotations.version>0.12.0</audience-annotations.version>
     <jmockit.version>1.48</jmockit.version>
     <junit.version>5.6.2</junit.version>
     <junit-platform.version>1.6.2</junit-platform.version>
-    <log4j.version>1.2.17</log4j.version>
-    <mockito.version>3.6.28</mockito.version>
+    <mockito.version>4.9.0</mockito.version>
     <hamcrest.version>2.2</hamcrest.version>
-    <commons-cli.version>1.4</commons-cli.version>
-    <netty.version>4.1.63.Final</netty.version>
-    <jetty.version>9.4.43.v20210629</jetty.version>
-    <jackson.version>2.10.5.1</jackson.version>
+    <commons-cli.version>1.5.0</commons-cli.version>
+    <netty.version>4.1.86.Final</netty.version>
+    <jetty.version>9.4.51.v20230217</jetty.version>
+    <jackson.version>2.13.4.2</jackson.version>
     <jline.version>2.14.6</jline.version>
-    <snappy.version>1.1.7.7</snappy.version>
+    <snappy.version>1.1.9.1</snappy.version>
     <kerby.version>2.0.0</kerby.version>
     <bouncycastle.version>1.60</bouncycastle.version>
     <commons-collections.version>4.4</commons-collections.version>
@@ -480,6 +480,7 @@
     <checkstyle.version>8.39</checkstyle.version>
     <enforcer.version>3.0.0-M3</enforcer.version>
     <commons-io.version>2.11.0</commons-io.version>
+    <burningwave.mockdns.version>0.25.4</burningwave.mockdns.version>
 
     <!-- parameters to pass to C client build -->
     <c-client-openssl>yes</c-client-openssl>
@@ -562,20 +563,14 @@
         <version>${slf4j.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.slf4j</groupId>
-        <artifactId>slf4j-log4j12</artifactId>
-        <version>${slf4j.version}</version>
-        <exclusions>
-          <exclusion>
-            <groupId>*</groupId>
-            <artifactId>*</artifactId>
-          </exclusion>
-        </exclusions>
+        <groupId>ch.qos.logback</groupId>
+        <artifactId>logback-core</artifactId>
+        <version>${logback-version}</version>
       </dependency>
       <dependency>
-        <groupId>log4j</groupId>
-        <artifactId>log4j</artifactId>
-        <version>${log4j.version}</version>
+        <groupId>ch.qos.logback</groupId>
+        <artifactId>logback-classic</artifactId>
+        <version>${logback-version}</version>
       </dependency>
       <dependency>
         <groupId>org.jmockit</groupId>
@@ -676,6 +671,11 @@
         <groupId>commons-io</groupId>
         <artifactId>commons-io</artifactId>
         <version>${commons-io.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.burningwave</groupId>
+        <artifactId>tools</artifactId>
+        <version>${burningwave.mockdns.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -792,7 +792,7 @@
         <plugin>
           <groupId>org.owasp</groupId>
           <artifactId>dependency-check-maven</artifactId>
-          <version>5.3.0</version>
+          <version>7.1.0</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -831,6 +831,11 @@
           <artifactId>maven-bundle-plugin</artifactId>
           <version>5.1.1</version>
         </plugin>
+        <plugin>
+          <groupId>org.cyclonedx</groupId>
+          <artifactId>cyclonedx-maven-plugin</artifactId>
+          <version>2.7.6</version>
+       </plugin>
       </plugins>
     </pluginManagement>
 
@@ -986,7 +991,6 @@
         <artifactId>apache-rat-plugin</artifactId>
         <configuration>
           <excludes>
-            <exclude>**/log4j.properties</exclude>
             <exclude>**/README.md</exclude>
             <exclude>**/findbugsExcludeFile.xml</exclude>
             <exclude>**/checkstyle-noframes-sorted.xsl</exclude>
@@ -1122,6 +1126,18 @@
                 </bannedDependencies>
               </rules>
             </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.cyclonedx</groupId>
+        <artifactId>cyclonedx-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>makeBom</goal>
+            </goals>
+            <phase>package</phase>
           </execution>
         </executions>
       </plugin>

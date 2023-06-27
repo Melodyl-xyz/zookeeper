@@ -50,6 +50,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
 import org.apache.zookeeper.ClientCnxn.EndOfStreamException;
 import org.apache.zookeeper.ClientCnxn.Packet;
 import org.apache.zookeeper.client.ZKClientConfig;
@@ -304,7 +305,7 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
      * @return a ChannelFuture that will complete when the write operation
      *         succeeds or fails.
      */
-    private ChannelFuture sendPktAndFlush(Packet p) {
+    private ChannelFuture sendPktAndFlush(Packet p) throws IOException {
         return sendPkt(p, true);
     }
 
@@ -314,7 +315,7 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
      * @return a ChannelFuture that will complete when the write operation
      *         succeeds or fails.
      */
-    private ChannelFuture sendPktOnly(Packet p) {
+    private ChannelFuture sendPktOnly(Packet p) throws IOException {
         return sendPkt(p, false);
     }
 
@@ -325,7 +326,10 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
         }
     };
 
-    private ChannelFuture sendPkt(Packet p, boolean doFlush) {
+    private ChannelFuture sendPkt(Packet p, boolean doFlush) throws IOException {
+        if (channel == null) {
+            throw new IOException("channel has been closed");
+        }
         // Assuming the packet will be sent out successfully. Because if it fails,
         // the channel will close and clean up queues.
         p.createBB();
@@ -336,7 +340,7 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
         return result;
     }
 
-    private void sendPrimePacket() {
+    private void sendPrimePacket() throws IOException {
         // assuming the first packet is the priming packet.
         sendPktAndFlush(outgoingQueue.remove());
     }
@@ -344,7 +348,7 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
     /**
      * doWrite handles writing the packets from outgoingQueue via network to server.
      */
-    private void doWrite(Queue<Packet> pendingQueue, Packet p, ClientCnxn cnxn) {
+    private void doWrite(Queue<Packet> pendingQueue, Packet p, ClientCnxn cnxn) throws IOException {
         updateNow();
         boolean anyPacketsSent = false;
         while (true) {
@@ -374,9 +378,6 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
 
     @Override
     void sendPacket(ClientCnxn.Packet p) throws IOException {
-        if (channel == null) {
-            throw new IOException("channel has been closed");
-        }
         sendPktAndFlush(p);
     }
 
@@ -448,6 +449,14 @@ public class ClientCnxnSocketNetty extends ClientCnxnSocket {
                     sslContext = x509Util.createSSLContext(clientConfig);
                     sslEngine = sslContext.createSSLEngine(host, port);
                     sslEngine.setUseClientMode(true);
+                    if (x509Util.getFipsMode(clientConfig) && x509Util.isServerHostnameVerificationEnabled(clientConfig)) {
+                        SSLParameters sslParameters = sslEngine.getSSLParameters();
+                        sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
+                        sslEngine.setSSLParameters(sslParameters);
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Server hostname verification: enabled HTTPS style endpoint identification algorithm");
+                        }
+                    }
                 }
             }
             pipeline.addLast("ssl", new SslHandler(sslEngine));

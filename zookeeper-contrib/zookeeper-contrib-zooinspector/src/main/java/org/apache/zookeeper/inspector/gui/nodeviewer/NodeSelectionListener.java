@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,24 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.zookeeper.audit;
-
-import org.apache.zookeeper.audit.AuditEvent.Result;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+package org.apache.zookeeper.inspector.gui.nodeviewer;
 
 /**
- * Log4j based audit logger
+ * An interface to be implented by any component that needs notification when a new element
+ * is selected in the UI JTree representing the set of available ZNodes.
  */
-public class Log4jAuditLogger implements AuditLogger {
-    private static final Logger LOG = LoggerFactory.getLogger(Log4jAuditLogger.class);
-
-    @Override
-    public void logAuditEvent(AuditEvent auditEvent) {
-        if (auditEvent.getResult() == Result.FAILURE) {
-            LOG.error(auditEvent.toString());
-        } else {
-            LOG.info(auditEvent.toString());
-        }
-    }
+public interface NodeSelectionListener {
+    void nodePathSelected(String nodePath);
 }

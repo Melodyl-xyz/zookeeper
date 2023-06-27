@@ -1,5 +1,5 @@
 <!--
-Copyright 2002-2004 The Apache Software Foundation
+Copyright 2002-2022 The Apache Software Foundation
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ limitations under the License.
     * [Administering](#sc_administering)
     * [Maintenance](#sc_maintenance)
         * [Ongoing Data Directory Cleanup](#Ongoing+Data+Directory+Cleanup)
-        * [Debug Log Cleanup (log4j)](#Debug+Log+Cleanup+%28log4j%29)
+        * [Debug Log Cleanup (logback)](#Debug+Log+Cleanup+Logback)
     * [Supervision](#sc_supervision)
     * [Monitoring](#sc_monitoring)
     * [Logging](#sc_logging)
@@ -436,7 +436,7 @@ in the unlikely event a recent log has become corrupted). This
 can be run as a cron job on the ZooKeeper server machines to
 clean up the logs daily.
 
-    java -cp zookeeper.jar:lib/slf4j-api-1.7.5.jar:lib/slf4j-log4j12-1.7.5.jar:lib/log4j-1.2.17.jar:conf org.apache.zookeeper.server.PurgeTxnLog <dataDir> <snapDir> -n <count>
+    java -cp zookeeper.jar:lib/slf4j-api-1.7.30.jar:lib/logback-classic-1.2.10.jar:lib/logback-core-1.2.10.jar:conf org.apache.zookeeper.server.PurgeTxnLog <dataDir> <snapDir> -n <count>
 
 
 Automatic purging of the snapshots and corresponding
@@ -445,14 +445,14 @@ enabled via the following configuration parameters **autopurge.snapRetainCount**
 this, see [Advanced Configuration](#sc_advancedConfiguration)
 below.
 
-<a name="Debug+Log+Cleanup+%28log4j%29"></a>
+<a name="Debug+Log+Cleanup+Logback"></a>
 
-#### Debug Log Cleanup (log4j)
+#### Debug Log Cleanup (logback)
 
 See the section on [logging](#sc_logging) in this document. It is
 expected that you will setup a rolling file appender using the
-in-built log4j feature. The sample configuration file in the
-release tar's conf/log4j.properties provides an example of
+in-built logback feature. The sample configuration file in the
+release tar's `conf/logback.xml` provides an example of
 this.
 
 <a name="sc_supervision"></a>
@@ -504,22 +504,20 @@ The ZooKeeper service can be monitored in one of three primary ways:
 ### Logging
 
 ZooKeeper uses **[SLF4J](http://www.slf4j.org)**
-version 1.7.5 as its logging infrastructure. For backward compatibility it is bound to
-**LOG4J** but you can use
-**[LOGBack](http://logback.qos.ch/)**
-or any other supported logging framework of your choice.
+version 1.7 as its logging infrastructure. By default ZooKeeper is shipped with
+**[LOGBack](http://logback.qos.ch/)** as the logging backend, but you can use
+any other supported logging framework of your choice.
 
-The ZooKeeper default *log4j.properties*
-file resides in the *conf* directory. Log4j requires that
-*log4j.properties* either be in the working directory
+The ZooKeeper default *logback.xml*
+file resides in the *conf* directory. Logback requires that
+*logback.xml* either be in the working directory
 (the directory from which ZooKeeper is run) or be accessible from the classpath.
 
 For more information about SLF4J, see
 [its manual](http://www.slf4j.org/manual.html).
 
-For more information about LOG4J, see
-[Log4j Default Initialization Procedure](http://logging.apache.org/log4j/1.2/manual.html#defaultInit)
-of the log4j manual.
+For more information about Logback, see
+[Logback website](http://logback.qos.ch/).
 
 <a name="sc_troubleshooting"></a>
 
@@ -650,8 +648,7 @@ property, when available, is noted below.
     (Java system property: **zookeeper.commitLogCount**)
     Zookeeper maintains an in-memory list of last committed requests for fast synchronization with
     followers when the followers are not too behind. This improves sync performance in case when your
-    snapshots are large (>100,000).
-    The default commitLogCount value is 500.
+    snapshots are large (>100,000). The default value is 500 which is the recommended minimum.
 
 * *snapSizeLimitInKb* :
     (Java system property: **zookeeper.snapSizeLimitInKb**)
@@ -1142,8 +1139,8 @@ property, when available, is noted below.
 * *audit.impl.class* :
     (Java system property: **zookeeper.audit.impl.class**)
     **New in 3.6.0:**
-    Class to implement the audit logger. By default log4j based audit logger org.apache.zookeeper.audit
-    .Log4jAuditLogger is used.
+    Class to implement the audit logger. By default logback based audit logger org.apache.zookeeper.audit
+    .Slf4jAuditLogger is used.
     See the [ZooKeeper audit logs](zookeeperAuditLogs.html) for more information.
 
 * *largeRequestMaxBytes* :
@@ -1163,6 +1160,15 @@ property, when available, is noted below.
     This setting doesn't limit the max TLS concurrency, but helps avoid herd
     effect due to TLS handshake timeout when there are too many in-flight TLS
     handshakes. Set it to something like 250 is good enough to avoid herd effect.
+
+* *netty.server.earlyDropSecureConnectionHandshakes*
+  (Java system property: **zookeeper.netty.server.earlyDropSecureConnectionHandshakes**)
+    If the ZooKeeper server is not fully started, drop TCP connections before performing the TLS handshake.
+    This is useful in order to prevent flooding the server with many concurrent TLS handshakes after a restart.
+    Please note that if you enable this flag the server won't answer to 'ruok' commands if it is not fully started.
+
+    The behaviour of dropping the connection has been introduced in ZooKeeper 3.7 and it was not possible to disable it.
+    Since 3.7.1 and 3.8.0 this feature is disabled by default.
 
 * *throttledOpWaitTime*
     (Java system property: **zookeeper.throttled_op_wait_time**)
@@ -1636,13 +1642,19 @@ and [SASL authentication for ZooKeeper](https://cwiki.apache.org/confluence/disp
     Specifies the file path to a Java keystore containing the local
     credentials to be used for client and quorum TLS connections, and the
     password to unlock the file.
+    
+* *ssl.keyStore.passwordPath* and *ssl.quorum.keyStore.passwordPath* :
+    (Java system properties: **zookeeper.ssl.keyStore.passwordPath** and **zookeeper.ssl.quorum.keyStore.passwordPath**)
+    **New in 3.8.0:**
+    Specifies the file path that contains the keystore password. Reading the password from a file takes precedence over 
+    the explicit password property.
 
 * *ssl.keyStore.type* and *ssl.quorum.keyStore.type* :
     (Java system properties: **zookeeper.ssl.keyStore.type** and **zookeeper.ssl.quorum.keyStore.type**)
     **New in 3.5.5:**
     Specifies the file format of client and quorum keystores. Values: JKS, PEM, PKCS12 or null (detect by filename).
     Default: null.
-    **New in 3.6.3, 3.7.0:**
+    **New in 3.5.10, 3.6.3, 3.7.0:**
     The format BCFKS was added.
 
 * *ssl.trustStore.location* and *ssl.trustStore.password* and *ssl.quorum.trustStore.location* and *ssl.quorum.trustStore.password* :
@@ -1652,12 +1664,18 @@ and [SASL authentication for ZooKeeper](https://cwiki.apache.org/confluence/disp
     credentials to be used for client and quorum TLS connections, and the
     password to unlock the file.
 
+* *ssl.trustStore.passwordPath* and *ssl.quorum.trustStore.passwordPath* :
+    (Java system properties: **zookeeper.ssl.trustStore.passwordPath** and **zookeeper.ssl.quorum.trustStore.passwordPath**)
+    **New in 3.8.0:**
+    Specifies the file path that contains the truststore password. Reading the password from a file takes precedence over 
+    the explicit password property.
+   
 * *ssl.trustStore.type* and *ssl.quorum.trustStore.type* :
     (Java system properties: **zookeeper.ssl.trustStore.type** and **zookeeper.ssl.quorum.trustStore.type**)
     **New in 3.5.5:**
     Specifies the file format of client and quorum trustStores. Values: JKS, PEM, PKCS12 or null (detect by filename).
     Default: null.
-    **New in 3.6.3, 3.7.0:**
+    **New in 3.5.10, 3.6.3, 3.7.0:**
     The format BCFKS was added.
 
 * *ssl.protocol* and *ssl.quorum.protocol* :
@@ -2428,7 +2446,7 @@ The output contains multiple lines with the following format:
 * *stmk* :
     Sets the current trace mask.  The trace mask is 64 bits,
     where each bit enables or disables a specific category of trace
-    logging on the server.  Log4J must be configured to enable
+    logging on the server. Logback must be configured to enable
     `TRACE` level first in order to see trace logging
     messages.  The bits of the trace mask correspond to the following
     trace logging categories.
