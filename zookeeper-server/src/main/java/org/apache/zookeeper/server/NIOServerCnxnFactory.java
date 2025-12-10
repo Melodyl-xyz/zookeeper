@@ -587,6 +587,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                         continue;
                     }
                     for (NIOServerCnxn conn : cnxnExpiryQueue.poll()) {
+                        // 时间轮获取数据
                         conn.close();
                     }
                 }
